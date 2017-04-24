@@ -71,6 +71,8 @@ if (!process.env.token) {
 
 var Botkit = require('./lib/Botkit.js');
 var os = require('os');
+var output = '';
+var response_context = {};
 
 var controller = Botkit.slackbot({
     debug: true,
@@ -79,6 +81,46 @@ var controller = Botkit.slackbot({
 var bot = controller.spawn({
     token: process.env.token
 }).startRTM();
+
+var Conversation = require('watson-developer-cloud/conversation/v1');
+
+// Set up Conversation service wrapper.
+var conversation = new Conversation({
+  username: '09b163d0-b27a-42c4-97a7-b29aa366411b',
+  password: 'FFVYAzx7fSYb',
+  path: { workspace_id: '05f4529a-6773-4a5d-9999-e13015180a5a' },
+  url: 'https://gateway.watsonplatform.net/conversation/api',
+  version_date: '2016-10-21',
+  version: 'v1'
+});
+
+// Start conversation with empty message.
+conversation.message({}, processResponse);
+
+function processResponse(err, response) {
+    // If an intent was detected, log it out to the console.
+    if (response.intents.length > 0) {
+        console.log('Detected intent: #' + response.intents[0].intent);
+    }
+
+    bot.say({
+        text: response.output.text[0],
+        channel: '#cs421' 
+    });
+
+    response_context = response.context;
+}
+
+controller.on('ambient', function(bot, message) {
+    conversation.message({
+        input: { text: message.text },
+        context: response_context
+      }, 
+      processResponse
+    );
+})
+
+/*
 
 controller.hears(['hello', 'hi'], 'direct_message,direct_mention,mention', function(bot, message) {
 
@@ -225,6 +267,7 @@ controller.hears(['uptime', 'identify yourself', 'who are you', 'what is your na
              '>. I have been running for ' + uptime + ' on ' + hostname + '.');
 
     });
+*/
 
 function formatUptime(uptime) {
     var unit = 'second';
