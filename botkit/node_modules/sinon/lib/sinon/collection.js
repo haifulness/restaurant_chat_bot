@@ -1,173 +1,119 @@
-/**
- * @depend util/core.js
- * @depend spy.js
- * @depend stub.js
- * @depend mock.js
- */
-/**
- * Collections of stubs, spies and mocks.
- *
- * @author Christian Johansen (christian@cjohansen.no)
- * @license BSD
- *
- * Copyright (c) 2010-2013 Christian Johansen
- */
-(function (sinonGlobal) {
-    "use strict";
+"use strict";
 
-    var push = [].push;
-    var hasOwnProperty = Object.prototype.hasOwnProperty;
+var sinonSpy = require("./spy");
+var sinonStub = require("./stub");
+var sinonMock = require("./mock");
+var throwOnFalsyObject = require("./throw-on-falsy-object");
+var collectOwnMethods = require("./collect-own-methods");
+var stubNonFunctionProperty = require("./stub-non-function-property");
 
-    function getFakes(fakeCollection) {
-        if (!fakeCollection.fakes) {
-            fakeCollection.fakes = [];
-        }
+var push = [].push;
 
-        return fakeCollection.fakes;
+function getFakes(fakeCollection) {
+    if (!fakeCollection.fakes) {
+        fakeCollection.fakes = [];
     }
 
-    function each(fakeCollection, method) {
-        var fakes = getFakes(fakeCollection);
+    return fakeCollection.fakes;
+}
 
-        for (var i = 0, l = fakes.length; i < l; i += 1) {
-            if (typeof fakes[i][method] === "function") {
-                fakes[i][method]();
-            }
+function each(fakeCollection, method) {
+    var fakes = getFakes(fakeCollection);
+    var matchingFakes = fakes.filter(function (fake) {
+        return typeof fake[method] === "function";
+    });
+
+    matchingFakes.forEach(function (fake) {
+        fake[method]();
+    });
+}
+
+var collection = {
+    verify: function verify() {
+        each(this, "verify");
+    },
+
+    restore: function restore() {
+        each(this, "restore");
+        this.fakes = [];
+    },
+
+    reset: function reset() {
+        each(this, "reset");
+    },
+
+    resetBehavior: function resetBehavior() {
+        each(this, "resetBehavior");
+    },
+
+    resetHistory: function resetHistory() {
+        each(this, "resetHistory");
+    },
+
+    verifyAndRestore: function verifyAndRestore() {
+        var exception;
+
+        try {
+            this.verify();
+        } catch (e) {
+            exception = e;
         }
-    }
 
-    function compact(fakeCollection) {
-        var fakes = getFakes(fakeCollection);
-        var i = 0;
-        while (i < fakes.length) {
-            fakes.splice(i, 1);
+        this.restore();
+
+        if (exception) {
+            throw exception;
         }
-    }
+    },
 
-    function makeApi(sinon) {
-        var collection = {
-            verify: function resolve() {
-                each(this, "verify");
-            },
+    add: function add(fake) {
+        push.call(getFakes(this), fake);
+        return fake;
+    },
 
-            restore: function restore() {
-                each(this, "restore");
-                compact(this);
-            },
+    spy: function spy() {
+        return this.add(sinonSpy.apply(sinonSpy, arguments));
+    },
 
-            reset: function restore() {
-                each(this, "reset");
-            },
+    stub: function stub(object, property/*, value*/) {
+        throwOnFalsyObject.apply(null, arguments);
 
-            verifyAndRestore: function verifyAndRestore() {
-                var exception;
+        var isStubbingEntireObject = typeof property === "undefined" && typeof object === "object";
+        var isStubbingNonFunctionProperty = property && typeof object[property] !== "function";
+        var stubbed = isStubbingNonFunctionProperty ?
+                        stubNonFunctionProperty.apply(null, arguments) :
+                        sinonStub.apply(null, arguments);
 
-                try {
-                    this.verify();
-                } catch (e) {
-                    exception = e;
-                }
+        if (isStubbingEntireObject) {
+            collectOwnMethods(stubbed).forEach(this.add.bind(this));
+        } else {
+            this.add(stubbed);
+        }
 
-                this.restore();
+        return stubbed;
+    },
 
-                if (exception) {
-                    throw exception;
-                }
-            },
+    mock: function mock() {
+        return this.add(sinonMock.apply(null, arguments));
+    },
 
-            add: function add(fake) {
-                push.call(getFakes(this), fake);
-                return fake;
-            },
+    inject: function inject(obj) {
+        var col = this;
 
-            spy: function spy() {
-                return this.add(sinon.spy.apply(sinon, arguments));
-            },
-
-            stub: function stub(object, property, value) {
-                if (property) {
-                    var original = object[property];
-
-                    if (typeof original !== "function") {
-                        if (!hasOwnProperty.call(object, property)) {
-                            throw new TypeError("Cannot stub non-existent own property " + property);
-                        }
-
-                        object[property] = value;
-
-                        return this.add({
-                            restore: function () {
-                                object[property] = original;
-                            }
-                        });
-                    }
-                }
-                if (!property && !!object && typeof object === "object") {
-                    var stubbedObj = sinon.stub.apply(sinon, arguments);
-
-                    for (var prop in stubbedObj) {
-                        if (typeof stubbedObj[prop] === "function") {
-                            this.add(stubbedObj[prop]);
-                        }
-                    }
-
-                    return stubbedObj;
-                }
-
-                return this.add(sinon.stub.apply(sinon, arguments));
-            },
-
-            mock: function mock() {
-                return this.add(sinon.mock.apply(sinon, arguments));
-            },
-
-            inject: function inject(obj) {
-                var col = this;
-
-                obj.spy = function () {
-                    return col.spy.apply(col, arguments);
-                };
-
-                obj.stub = function () {
-                    return col.stub.apply(col, arguments);
-                };
-
-                obj.mock = function () {
-                    return col.mock.apply(col, arguments);
-                };
-
-                return obj;
-            }
+        obj.spy = function () {
+            return col.spy.apply(col, arguments);
         };
 
-        sinon.collection = collection;
-        return collection;
-    }
+        obj.stub = function () {
+            return col.stub.apply(col, arguments);
+        };
 
-    var isNode = typeof module !== "undefined" && module.exports && typeof require === "function";
-    var isAMD = typeof define === "function" && typeof define.amd === "object" && define.amd;
+        obj.mock = function () {
+            return col.mock.apply(col, arguments);
+        };
 
-    function loadDependencies(require, exports, module) {
-        var sinon = require("./util/core");
-        require("./mock");
-        require("./spy");
-        require("./stub");
-        module.exports = makeApi(sinon);
+        return obj;
     }
+};
 
-    if (isAMD) {
-        define(loadDependencies);
-        return;
-    }
-
-    if (isNode) {
-        loadDependencies(require, module.exports, module);
-        return;
-    }
-
-    if (sinonGlobal) {
-        makeApi(sinonGlobal);
-    }
-}(
-    typeof sinon === "object" && sinon // eslint-disable-line no-undef
-));
+module.exports = collection;

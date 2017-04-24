@@ -27,7 +27,7 @@
  *
  * @see {@link http://www.ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring|19.1.3.6 Object.prototype.toString ( )}
  *
- * @version 1.1.1
+ * @version 1.2.0
  * @author Xotic750 <Xotic750@gmail.com>
  * @copyright  Xotic750
  * @license {@link <https://opensource.org/licenses/MIT> MIT}
@@ -46,6 +46,7 @@
   var isUndefined = _dereq_('validate.io-undefined');
   var nullTag = '[object Null]';
   var undefTag = '[object Undefined]';
+  var toStr = Object.prototype.toString;
 
   /**
    * The `toStringTag` method returns "[object type]", where type is the
@@ -65,7 +66,7 @@
     if (isUndefined(value)) {
       return undefTag;
     }
-    return Object.prototype.toString.call(value);
+    return toStr.call(value);
   };
 }());
 

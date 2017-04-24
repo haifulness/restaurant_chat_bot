@@ -1,200 +1,163 @@
-/**
- * @depend util/core.js
- * @depend extend.js
- * @depend spy.js
- * @depend behavior.js
- * @depend walk.js
- */
-/**
- * Stub functions
- *
- * @author Christian Johansen (christian@cjohansen.no)
- * @license BSD
- *
- * Copyright (c) 2010-2013 Christian Johansen
- */
-(function (sinonGlobal) {
-    "use strict";
+"use strict";
 
-    function makeApi(sinon) {
-        function stub(object, property, func) {
-            if (!!func && typeof func !== "function" && typeof func !== "object") {
-                throw new TypeError("Custom stub should be a function or a property descriptor");
-            }
+var behavior = require("./behavior");
+var behaviors = require("./default-behaviors");
+var spy = require("./spy");
+var extend = require("./util/core/extend");
+var functionToString = require("./util/core/function-to-string");
+var getPropertyDescriptor = require("./util/core/get-property-descriptor");
+var wrapMethod = require("./util/core/wrap-method");
+var stubEntireObject = require("./stub-entire-object");
+var stubDescriptor = require("./stub-descriptor");
+var throwOnFalsyObject = require("./throw-on-falsy-object");
 
-            var wrapper;
+function stub(object, property, descriptor) {
+    throwOnFalsyObject.apply(null, arguments);
 
-            if (func) {
-                if (typeof func === "function") {
-                    wrapper = sinon.spy && sinon.spy.create ? sinon.spy.create(func) : func;
-                } else {
-                    wrapper = func;
-                    if (sinon.spy && sinon.spy.create) {
-                        var types = sinon.objectKeys(wrapper);
-                        for (var i = 0; i < types.length; i++) {
-                            wrapper[types[i]] = sinon.spy.create(wrapper[types[i]]);
-                        }
-                    }
-                }
-            } else {
-                var stubLength = 0;
-                if (typeof object === "object" && typeof object[property] === "function") {
-                    stubLength = object[property].length;
-                }
-                wrapper = stub.create(stubLength);
-            }
+    var actualDescriptor = getPropertyDescriptor(object, property);
+    var isStubbingEntireObject = typeof property === "undefined" && typeof object === "object";
+    var isCreatingNewStub = !object && typeof property === "undefined";
+    var isStubbingDescriptor = object && property && Boolean(descriptor);
+    var isStubbingNonFuncProperty = typeof object === "object"
+                                    && typeof property !== "undefined"
+                                    && (typeof actualDescriptor === "undefined"
+                                    || typeof actualDescriptor.value !== "function")
+                                    && typeof descriptor === "undefined";
+    var isStubbingExistingMethod = !isStubbingDescriptor
+                                    && typeof object === "object"
+                                    && typeof actualDescriptor !== "undefined"
+                                    && typeof actualDescriptor.value === "function";
+    var arity = isStubbingExistingMethod ? object[property].length : 0;
 
-            if (!object && typeof property === "undefined") {
-                return sinon.stub.create();
-            }
+    if (isStubbingEntireObject) {
+        return stubEntireObject(stub, object);
+    }
 
-            if (typeof property === "undefined" && typeof object === "object") {
-                sinon.walk(object || {}, function (value, prop, propOwner) {
-                    // we don't want to stub things like toString(), valueOf(), etc. so we only stub if the object
-                    // is not Object.prototype
-                    if (
-                        propOwner !== Object.prototype &&
-                        prop !== "constructor" &&
-                        typeof sinon.getPropertyDescriptor(propOwner, prop).value === "function"
-                    ) {
-                        stub(object, prop);
-                    }
-                });
+    if (isStubbingDescriptor) {
+        return stubDescriptor.apply(null, arguments);
+    }
 
-                return object;
-            }
+    if (isCreatingNewStub) {
+        return stub.create();
+    }
 
-            return sinon.wrapMethod(object, property, wrapper);
-        }
+    var s = stub.create(arity);
+    s.rootObj = object;
+    s.propName = property;
+    s.restore = function restore() {
+        Object.defineProperty(object, property, actualDescriptor);
+    };
 
+    return isStubbingNonFuncProperty ? s : wrapMethod(object, property, s);
+}
 
-        /*eslint-disable no-use-before-define*/
-        function getParentBehaviour(stubInstance) {
-            return (stubInstance.parent && getCurrentBehavior(stubInstance.parent));
-        }
+stub.createStubInstance = function (constructor) {
+    if (typeof constructor !== "function") {
+        throw new TypeError("The constructor should be a function.");
+    }
+    return stub(Object.create(constructor.prototype));
+};
 
-        function getDefaultBehavior(stubInstance) {
-            return stubInstance.defaultBehavior ||
-                    getParentBehaviour(stubInstance) ||
-                    sinon.behavior.create(stubInstance);
-        }
+/*eslint-disable no-use-before-define*/
+function getParentBehaviour(stubInstance) {
+    return (stubInstance.parent && getCurrentBehavior(stubInstance.parent));
+}
 
-        function getCurrentBehavior(stubInstance) {
-            var behavior = stubInstance.behaviors[stubInstance.callCount - 1];
-            return behavior && behavior.isPresent() ? behavior : getDefaultBehavior(stubInstance);
-        }
-        /*eslint-enable no-use-before-define*/
+function getDefaultBehavior(stubInstance) {
+    return stubInstance.defaultBehavior ||
+            getParentBehaviour(stubInstance) ||
+            behavior.create(stubInstance);
+}
 
-        var uuid = 0;
+function getCurrentBehavior(stubInstance) {
+    var currentBehavior = stubInstance.behaviors[stubInstance.callCount - 1];
+    return currentBehavior && currentBehavior.isPresent() ? currentBehavior : getDefaultBehavior(stubInstance);
+}
+/*eslint-enable no-use-before-define*/
 
-        var proto = {
-            create: function create(stubLength) {
-                var functionStub = function () {
-                    return getCurrentBehavior(functionStub).invoke(this, arguments);
-                };
+var uuid = 0;
 
-                functionStub.id = "stub#" + uuid++;
-                var orig = functionStub;
-                functionStub = sinon.spy.create(functionStub, stubLength);
-                functionStub.func = orig;
-
-                sinon.extend(functionStub, stub);
-                functionStub.instantiateFake = sinon.stub.create;
-                functionStub.displayName = "stub";
-                functionStub.toString = sinon.functionToString;
-
-                functionStub.defaultBehavior = null;
-                functionStub.behaviors = [];
-
-                return functionStub;
-            },
-
-            resetBehavior: function () {
-                var i;
-
-                this.defaultBehavior = null;
-                this.behaviors = [];
-
-                delete this.returnValue;
-                delete this.returnArgAt;
-                this.returnThis = false;
-
-                if (this.fakes) {
-                    for (i = 0; i < this.fakes.length; i++) {
-                        this.fakes[i].resetBehavior();
-                    }
-                }
-            },
-
-            onCall: function onCall(index) {
-                if (!this.behaviors[index]) {
-                    this.behaviors[index] = sinon.behavior.create(this);
-                }
-
-                return this.behaviors[index];
-            },
-
-            onFirstCall: function onFirstCall() {
-                return this.onCall(0);
-            },
-
-            onSecondCall: function onSecondCall() {
-                return this.onCall(1);
-            },
-
-            onThirdCall: function onThirdCall() {
-                return this.onCall(2);
-            }
+var proto = {
+    create: function create(stubLength) {
+        var functionStub = function () {
+            return getCurrentBehavior(functionStub).invoke(this, arguments);
         };
 
-        function createBehavior(behaviorMethod) {
-            return function () {
-                this.defaultBehavior = this.defaultBehavior || sinon.behavior.create(this);
-                this.defaultBehavior[behaviorMethod].apply(this.defaultBehavior, arguments);
-                return this;
-            };
+        functionStub.id = "stub#" + uuid++;
+        var orig = functionStub;
+        functionStub = spy.create(functionStub, stubLength);
+        functionStub.func = orig;
+
+        extend(functionStub, stub);
+        functionStub.instantiateFake = stub.create;
+        functionStub.displayName = "stub";
+        functionStub.toString = functionToString;
+
+        functionStub.defaultBehavior = null;
+        functionStub.behaviors = [];
+
+        return functionStub;
+    },
+
+    resetBehavior: function () {
+        var fakes = this.fakes || [];
+
+        this.defaultBehavior = null;
+        this.behaviors = [];
+
+        delete this.returnValue;
+        delete this.returnArgAt;
+        delete this.fakeFn;
+        this.returnThis = false;
+
+        fakes.forEach(function (fake) {
+            fake.resetBehavior();
+        });
+    },
+
+    resetHistory: spy.reset,
+
+    reset: function () {
+        this.resetHistory();
+        this.resetBehavior();
+    },
+
+    onCall: function onCall(index) {
+        if (!this.behaviors[index]) {
+            this.behaviors[index] = behavior.create(this);
         }
 
-        for (var method in sinon.behavior) {
-            if (sinon.behavior.hasOwnProperty(method) &&
-                !proto.hasOwnProperty(method) &&
-                method !== "create" &&
-                method !== "withArgs" &&
-                method !== "invoke") {
-                proto[method] = createBehavior(method);
-            }
-        }
+        return this.behaviors[index];
+    },
 
-        sinon.extend(stub, proto);
-        sinon.stub = stub;
+    onFirstCall: function onFirstCall() {
+        return this.onCall(0);
+    },
 
-        return stub;
+    onSecondCall: function onSecondCall() {
+        return this.onCall(1);
+    },
+
+    onThirdCall: function onThirdCall() {
+        return this.onCall(2);
     }
+};
 
-    var isNode = typeof module !== "undefined" && module.exports && typeof require === "function";
-    var isAMD = typeof define === "function" && typeof define.amd === "object" && define.amd;
-
-    function loadDependencies(require, exports, module) {
-        var core = require("./util/core");
-        require("./behavior");
-        require("./spy");
-        require("./extend");
-        module.exports = makeApi(core);
+Object.keys(behavior).forEach(function (method) {
+    if (behavior.hasOwnProperty(method) &&
+        !proto.hasOwnProperty(method) &&
+        method !== "create" &&
+        method !== "withArgs" &&
+        method !== "invoke") {
+        proto[method] = behavior.createBehavior(method);
     }
+});
 
-    if (isAMD) {
-        define(loadDependencies);
-        return;
+Object.keys(behaviors).forEach(function (method) {
+    if (behaviors.hasOwnProperty(method) && !proto.hasOwnProperty(method)) {
+        behavior.addBehavior(stub, method, behaviors[method]);
     }
+});
 
-    if (isNode) {
-        loadDependencies(require, module.exports, module);
-        return;
-    }
-
-    if (sinonGlobal) {
-        makeApi(sinonGlobal);
-    }
-}(
-    typeof sinon === "object" && sinon // eslint-disable-line no-undef
-));
+extend(stub, proto);
+module.exports = stub;

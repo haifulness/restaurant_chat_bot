@@ -1,66 +1,488 @@
-
-v1.17.7 / 2016-12-31
+2.1.0 / 2017-03-20
 ==================
 
+  * Redesign the template (#1339)
+  * [feature] adds spy.calledImmediatelyBefore and spy.calledImmediatelyAfter
+  * Fix issue #1332: little bug correction in spy.printf "%*" formatter.
+
+2.0.0 / 2017-03-15
+==================
+
+  * Add restore method for stubbed property descriptors
+  * Allow stubbing getters and setters for function properties
+  * Add getters/setters stub behaviors
+  * Refactor xhr and xhr.upload to use the same EventTargetHandler
+  * Remove SSL part of base url
+
+v2.0.0-pre.6 / 2017-02-27
+=========================
+
+  * Add sinon.addBehavior, use it to add the default behaviors
+  * Use Node instead of Ruby in the build script
+  * Lots of documentation updates
+  * Many dependency updates
+  * Add a simple implementation og ANSI colors and boot out chalk
+  * No circular dependencies, thank you very much
+  * Replace homegrowns with ES5
+  * Remove legacy IE bits from code
+  * Fire onload event on non-2xx HTTP statuses in FakeXDomainRequest
+  * Extract throwOnFalsyObject to own function
+  * Stop polluting the test console with a "test" string
+  * Complete internalization of `extend` and `typeOf`
+  * Allow calling original function from stub. Closes #989 (#1234)
+  * Matcher for Set type
+  * Matcher for Map type
+  * Fix set iterableToString test on IE11
+  * add test-dev npm script to run tests in watch mode
+
+v2.0.0-pre.5 / 2016-12-31
+=========================
+
+  * 2.0.0-pre.5
+  * Update Changelog.txt and AUTHORS for new release
+  * Update changelog for pre.4
+  * Remove polyfill for Promise
+  * Remove old, unused, ci script for BusterJS
+  * Abort pre-commit script when no files are changed
+  * Check for required arguments
+  * Make SED in-place update switch work on BSD
+  * Upgrade text-encoding to the latest version
+  * Improve rendering of sandbox.create(config) example
+  * Remove sinon.test from sandbox documentation
+  * Use baseurl to render links correctly on github pages
+  * Specify same version of github-pages as github
+  * Remove release_id from front matter
+  * Update Gemfile.lock to use latest supported Jekyll
+  * Fix #614: Add missing documentation for sandbox methods
+  * Add missing documentation for stubs
   * Fix #1026: stub watch method on object
   * Fix invalid test for "does not walk the same property twice"
-  * Fix spying/stubbing on *etter methods
-  * restoring *etters does not invoke the getter #1124
+  * Add test for issue #1026
+  * Fix 810 - Added documentation for sinon.restore()
+  * Add docs for new array matchers
+  * Array contains matcher fails when actual is not an array
+  * Array endsWith matcher fails when actual is not an array
+  * Array startsWith matcher fails when actual is not an array
+  * Array deepEquals matcher fails when actual is not an array
+  * Add .resolves and .rejects to stub (#1211)
+  * Accept routing DSLs on fake server
+  * Convert remaining calledWith methods to use diff color formatting
+  * Color diffs for sinon matchers
+  * Print diffs for multiple spy calls
+  * Add new spy output formatter for handling diffs
+  * Add contains array matcher
+  * Add endsWith array matcher
+  * Add startsWith array matcher
+  * Add deepEquals array matcher
+  * Add more array matchers
+  * Extract deprecated.printWarning
+  * Move empty stub creation to avoid unnecessary stub.create
+  * Fix typo on property name called 'matchingAguments'
+  * Soften migration path with deprecation warning
+  * Update docs and migration guide
+  * Convert 3 arg stub to callsFake
+  * Update format docs to refer to formatio
+  * Fix being able to spy Error
+  * Prepare documentation using site in GitHub Pages
+  * Add link to LICENSE in README.md
+  * Add documentation for accessor method support for stubs and spies
+  * Previous expectation failures are checked and re-thrown again in mock.verify()
+  * Expose XHR.setStatus to simplify asynchronous answers
+  * Fix typo
+  * Add a how-to article about using links seams for CommonJS modules
+  * stub() will fail if passed an empty property descriptor
+  * Rename func argument to funcOrDescriptor
+  * Add documentation for sinon.assert.match
+  * XHR: test for readystatechange not dispatching after .abort() in DONE state
+  * XHR: fix readystatechange event after .abort() in DONE state
+  * Add tests for xhr.readyState after abort()
+  * Test that demonstrates that a mock can be called more times than expected without failing (if the exception is silenced).
 
-v1.17.6 / 2016-09-19
+n.n.n / 2017-02-27
 ==================
 
-  * Throw when sandbox.restore is given arguments (Fixes #1149) (#1151)
-  * Fix a regression introduced in #692 (#1098)
 
-v1.17.5 / 2016-07-26
+
+v2.0.0-pre.6 / 2017-02-27
+=========================
+
+  * Merge pull request #1303 from dougo/docs-fixups
+    Docs fixups
+  * Merge pull request #1302 from sinonjs/add-behavior
+    addBehavior
+  * Merge pull request #1300 from Gvozd/optimize_performance
+    Optimize performance of call-stack getting
+  * Merge pull request #1301 from fatso83/1299-redirect-traffic-to-releases
+    Redirect /docs and /downloads to /releases
+  * Merge pull request #1296 from sinonjs/remove-deal-links
+    Remove dead links
+  * Merge pull request #1295 from mroderick/add-bithound-config
+    Add .bithoundrc
+  * Merge branch 'bouk-server-aint-xhr'
+
+  * Merge pull request #1293 from mroderick/update-v1-docs-with-bundler-warnings
+    Update 1.x documentation to say that it doesn't work with
+    bundlers
+  * Merge pull request #1294 from sinonjs/browserify-build
+    Use Node instead of Ruby in the build script
+  * Merge pull request #1292 from mroderick/update-readme
+    Update readme
+  * Merge pull request #1291 from mroderick/update-phantomjs
+    Use phantomjs-prebuilt
+  * Merge pull request #1289 from mroderick/fix-invalid-release-version-in-docs
+    Fix invalid release number in v1.17.7.md front matter
+  * Merge pull request #1290 from sinonjs/common-eslint
+    Use common Sinon.JS eslint config
+  * Merge pull request #1288 from mroderick/improve-documentation
+    Improve documentation
+  * Merge pull request #1283 from lucasfcosta/docs-stub-callThrough
+    Add docs for stub.callThrough()
+  * Merge pull request #1285 from sinonjs/uncycle-server-deps
+    Uncycle server deps
+  * Merge pull request #1282 from sinonjs/mochify-3
+    Use mocaccino 2 and mochify 3
+  * Merge pull request #1281 from mroderick/add-missing-documentation
+    Add missing documentation
+  * Merge pull request #1277 from mroderick/remove-copyright-comments
+    Remove copyright comments
+  * Merge pull request #1271 from mroderick/use-es5-features
+    Refactoring: use ES5.1 features
+  * Merge pull request #1273 from melinath/patch-1
+    Update text-encoding version
+  * Merge pull request #1255 from fatso83/remove-legacy-ie
+    Remove traces of legacy IE
+  * Merge pull request #1266 from duclet/chalk
+    Switch to using "chalk" from "colors"
+  * Merge pull request #1260 from JoshuaCWebDeveloper/ajax_events
+    Fire onload event on non-2xx HTTP statuses in
+    FakeXDomainRequest - fixes #1259
+  * Merge pull request #1257 from piamancini/patch-1
+    Add backers and sponsors from Open Collective
+  * Merge pull request #1256 from sprzybylski/download-page
+    Create downloads page (#1218)
+  * Merge pull request #1252 from mroderick/update-bundle-for-ruby-2.4.0
+    Update Gemfile for ruby 2.4.0
+  * Merge pull request #1254 from mroderick/refute-issue-1245-in-sinon-2
+    Add test to disprove issue 1245 in Sinon 2.x
+  * Merge pull request #1253 from BenBrostoff/error-equality
+    Add error equality to deepEqual
+  * Merge pull request #1243 from sprzybylski/changelog-page
+    Update changelog page in postversion.sh
+  * Merge pull request #1239 from mroderick/refactor-stub-method
+    Refactor stub methods
+  * Merge pull request #1242 from Floby/add-documentation-for-promise-stub
+    Add documentation for .rejects() and .resolves()
+  * Merge pull request #1241 from mroderick/cleanup-test-console
+    Stop polluting the test console with a "test" string
+  * Merge pull request #1238 from tarjei/patch-1
+    Document server.requests
+  * Merge pull request #1235 from jonnyreeves/feature/internalize
+    Internalise `typeOf` and `extends`
+  * Merge pull request #1233 from lucasfcosta/fix-deepEqual-for-matchers
+    Ensures different matchers won't be called against each
+    other. Closes…
+  * Merge pull request #1232 from lucasfcosta/sets-matchers
+    Sets matchers
+  * Merge pull request #1227 from zuzusik/zuzusik-always_chain_behavior_with_stub
+    Always chain behavior with stub
+  * Merge pull request #1215 from lucasfcosta/maps-matchers
+    Maps matchers
+  * Merge pull request #1226 from lucasfcosta/improve-site-readability
+    Improve site readability
+  * Merge pull request #1225 from lucasfcosta/resolve-reject-promise-upon-invoke
+    Resolve/reject promise only upon invoke
+
+v2.0.0-pre.5 / 2016-12-31
+=========================
+
+  * Merge pull request #1223 from fatso83/release-script-improvements
+    Minor fixes to the release scripts
+  * Merge pull request #1222 from Gothdo/patch-1
+    Upgrade text-encoding to the latest version
+  * Merge pull request #1216 from mroderick/improve-documentation
+    Improve documentation for stubs and sandboxes
+  * Merge pull request #1217 from mroderick/make-docs-run-on-github-pages
+    Update Gemfile.lock to use latest supported Jekyll
+  * Merge pull request #1213 from tiemevanveen/docs-restore
+    Added documentation for sinon.restore()
+  * Merge pull request #1214 from mroderick/fix-1026-in-2.x
+    Fix 1026 in 2.x
+  * Merge pull request #1210 from lucasfcosta/document-new-array-matchers
+    Add docs for new array matchers
+  * Merge pull request #1203 from jdgreenberger/add-expectation-diff-logs
+    Add expectation diff logs
+  * Merge pull request #1208 from lucasfcosta/array-matchers
+    Array matchers
+  * Merge pull request #1209 from lucasfcosta/avoid-unnecessary-empty-stub-creation
+    Avoid unnecessary empty stub creation
+  * Merge pull request #1207 from hurrymaplelad/calls-fake
+    Replace `stub(o, 'm', fn)` with `stub(o, 'm').callsFake(fn)`
+  * Merge pull request #1162 from dottedmag/master
+    XHR spec conformance: abort() should not dispatch
+    readystatechange event in DONE state
+  * Merge pull request #1184 from mroderick/fail-on-empty-property-descriptor
+    Fail on empty property descriptor
+  * Merge pull request #1206 from fatso83/sinon-format-docs
+    Update format docs to refer to formatio
+  * Merge pull request #1204 from estobbart/master
+    Fix being able to spy Error
+  * Merge pull request #1189 from mroderick/docs-in-github-pages
+    Prepare documentation using site in GitHub Pages
+  * Merge pull request #1180 from mroderick/add-documentation-for-assert.match
+    Add documentation for sinon.assert.match
+  * Merge pull request #1182 from mroderick/document-accessor-support
+    Add documentation for accessor method support for stubs and
+    spies
+  * Merge pull request #1191 from LostArchives/master
+    Add link to LICENSE in README.md
+  * Merge pull request #1188 from DanReyLop/verify-silenced-exceptions
+    Mock expectation errors are now re-thrown when calling
+    mock.verify()
+  * Merge pull request #1186 from mroderick/add-how-to-link-seam-commonjs
+    Add a how-to article about using links seams for CommonJS
+    modules
+  * Merge pull request #1178 from dottedmag/feature-xhr-set-status
+    Expose XHR.setStatus to simplify asynchronous answers
+
+2.0.0-pre.5/ 2016-12-31
 ==================
 
-  * Add prepublish steps to avoid including extra files
-  * use xhr.progress (length of body/response) for progress event
-  * capture response length from setResponseBody
-  * updated current tests to account for api changes
-  * added xhr.error() method to simulate network errors
-  * stopped treating non-200 responses as errors
-  * Port XHR and deepEqual test cases from master
-  * Fix deepEqual reliance on prototype hasOwnProperty() in v0.17
+  * Upgrade text-encoding to the latest version
+  * Remove sinon.test from sandbox documentation
+  * Fix #1026: stub watch method on object
+  * Add .resolves and .rejects to stub (#1211)
+  * Accept routing DSLs on fake server
+  * Color diffs for sinon matchers
+  * Add new spy output formatter for handling diffs
+  * Add various array matchers
+  * Convert 3 arg stub to callsFake
+  * Fix being able to spy Error
+  * Prepare documentation using site in GitHub Pages
+  * Various documentation additions and fixes
+  * Previous expectation failures are checked and re-thrown again in mock.verify()
+  * Expose XHR.setStatus to simplify asynchronous answers
+  * XHR: test for readystatechange not dispatching after .abort() in DONE state
+  * XHR: fix readystatechange event after .abort() in DONE state
 
-v1.17.4 / 2016-05-02
-====================
+2.0.0-pre.4 / 2016-11-10
+==================
+  * Use last matching withArgs declaration when using matchers (#1183)
+  * Implement XHR.overrideMimeType
+  * Fire .onprogress event handler in fake XHR
+  * Expose readyState constants on XHR instances
+  * add configurable unsafe header checks (#1061)
 
-  * Release version 1.17.4
-  * Improve Blob support detection logics (#1039)
-  * Re-did #861 for v1.17 branch
-  * Caught exceptions from async tests are thrown by simon.test.
-  * Add tests for #947
+2.0.0-pre.3 / 2016-09-19
+==================
+  * Add assertion check for too many args with calledOnce/Twice/Thrice
+  * Much internal refactoring relating to CommonJS
 
-1.17.4 / 2016-05-02
+2.0.0-pre.2 / 2016-07-07
 ==================
 
-  * Improve Blob support detection logics (#1039)
-  * Re-did #861 for v1.17 branch
-  * Caught exceptions from async tests are thrown by simon.test.
-  * Add tests for #947
+  * CJSify sinon.call tests (#1079)
+  * CJSify sinon.calledInOrder tests (#1080)
+  * CJSify get-config tests (#1081)
+  * CJSify sinon.assert tests (#1078)
+  * Resolve test failure in node 0.10.x (#1073)
+  * Expose `sinon.assert` on sandbox instances. (#1076)
+  * Add resetBehavior and resetHistory to sandbox API (#1072)
+  * Fix incorrect inline function names
+  * Fix calledOnce on tests for #283. This closes #283.
+  * Add sandbox.reset() docs
+  * Add a line recommending how to pronounce.
+  * Improve tests based on PR feedback
+  * Allow xhr.respond(0) to simulate a network failure and call onerror
+  * Use event loaded instead of error event for code like 403, 500, etc.
+  * Fix invalid markdown in fake-timers.ms (#1054)
+  * Do not invoke getters in walk (#1059)
+  * ReactNative compatibility. Allow sinon fakeServer to run in React Native (#1052)
+  * added timeouts to ensure tests pass
+  * Run tests on stable Node 6 instead of unstable Node 5
+  * added tests to ensure only expected events are fired (#1043)
+  * Fixed formatting of issue template
+  * Added note on using latest version
+  * Fix onerror event triggering for fake xhr requests (#1041)
+  * Add missing mocaccino and phantomic to package.json (#1029)
+  * Pull request and issue templates (#1012)
+  * Fix capturing of stack traces in Phantom.js.
+  * Allow sinon.calledInOrder to be called either with an array of spies or multiple spies as parameters.  Add explicit test cases for sinon.calledInOrder
+  * Fix typos found by codespell
+  * Document faking of setImmediate and clearImmediate
+  * Add feature detection guard for tests containing es6 Symbols
+  * Add support for es6 Symbol to wrapMethod method
+  * Convert values to strings with toString instead of String()
+  * Add typeOf matcher for symbol type
+  * Make expectetation fail as expected when called with wrong Symbol
+  * Make mock report expected TypeError when expecting number and given symbol
+  * Add support for es6 Symbol to match.has method
+  * Make error message when failing to stub method support es6 symbol
+  * Make yieldToOn fail as expected when yielding an es6 Symbol
+  * Add support for es6 Symbol to match.same method
+  * Make yieldTo fail as expected when yielding an es6 Symbol
+  * Add support for es6 Symbol to match method
+  * Work around SauceLabs security limitations
+  * Declare test specific eslint configs in test/.eslintrc
+  * Add test-coverage script
+  * Add eslint-plugin-mocha
+  * Remove browserify-shim
+  * Setup saucelabs tests and adjust travis config
+  * Feature detect __proto__ to exclude a timer test in IE 10
+  * Convert webworker test to mocha
+  * Remove buster
+  * Replace npm test script with mocha / mochify invocations
+  * Fix async fake-xml-http-request tests
+  * Convert issues tests to mocha
+  * Convert util tests to mocha
+  * Convert core tests to mocha
+  * Convert stub tests to mocha
+  * Convert typeof tests to mocha
+  * Convert spy tests to mocha
+  * Convert sandbox tests to mocha
+  * Convert mock tests to mocha
+  * Convert hello world test to mocha
+  * Convert extend tests to mocha
+  * Convert collection tests to mocha
+  * Convert call tests to mocha
+  * Convert assert tests to mocha
+  * Convert matcher tests to mocha
+  * Update docs/TODO.md to reflect plan to Jekyll
+  * CJSify Spy and Stub Tests.
+  * CJSify Core Util Tests.
+  * Migrate Packaged Tests to use a Browserified Build.
+  * fix non enumerable methods stub restore
+  * Improve Blob support detection logics
+  * Fix a typo in Contributing.md
+  * Update Node versions on Travis
+  * Use PhantomJS 2.
+  * Fix #835: make err.message writable
+  * Remove linting errors in switch cases
+  * Add spy.notCalled to documentation
+  * Remove `sinon.test()` and `sinon.testCase`.
+  * Remove `sinon.log` and `sinon.logError`
+  * De-fluff
+  * Remove `sinon-test` module.
+  * Extract `get-config` tests from `sinon-test`.
+  * Extract `function-to-string` tests from `sinon-test`.
+  * Extract `restore` tests from `sinon-test`.
+  * Extract `createStubInstance` tests from `sinon-test`
+  * Extract `deep-equal` tests from `sinon-test`.
+  * Extract `wrap-method` tests from `sinon-test`.
+  * Extract `extend` tests from `sinon-test` to `extend-test`
+  * Move 'lib/util/core' tests into 'test/util/core'
+  * Remove the use of `sinon.format` from the codebase
+  * Require sinon.deepEqual in a more modular way
+  * Fix 648: test for this.proxy before trying toString on it
+  * use the correct sinon.deepEqual to test sinon matcher
+  * add stub test to ensure sinon matcher is recognized within stub.withArgs
+  * update repo link
+  * Remove unused dependency util
+  * Update samsam
+  * Update lolex
+  * Update browserify
+  * Update dependency pre-commit
+  * Update buster-istanbul to 0.1.15
+  * ignore webstorm configs
+  * fix async issues and increase buster timeout
+  * test on node 5
+  * Fixes typo error in docs
+  * fix typo in lib/sinon.js
+  * Fixes typo error in docs
+  * Adding comment to warn against using eval
+  * fix linting
+  * Get rid of eval in sinon spy
+  * Update README URLs based on HTTP redirects
 
-1.17.3 / 2016-01-27
+2.0.0-pre / 2015-12-02
 ==================
 
-  * Fix toString() calls
+  * 2.0.0 pre-release
+  * Extract `sandbox` into a CommonJS module.
+  * Clarify documentation on creating stubs and spies
+  * Extract `util/fake_server_with_clock` into a CommonJS module
+  * Extract `util/fake_server` into a CommonJS module.
+  * Extract `util/fake_timers` into a CommonJS module.
+  * Extract `util/fake_xml_http_request` into a CommonJS module.
+  * Extract `util/fake_xdomain_request` into a CommonJS module.
+  * Extract `util/event` into a CommonJS module.
+  * Extract `sinon.logError` into a CommonJS module.
+  * Extract (most of) sinon.collection into a CommonJS module
+  * Extract `sinon.mock` into a CommonJS module.
+  * Import mock's dependencies are CommonJS modules.
+  * Extract `createSpyCall` into a CommonJS module.
+  * Extract `sinon.assert` into a CommonJS module.
+  * Remove `walk` from sinon's public API.
+  * Patch up linting errors
+  * Remove `sinon` import from stub
+  * Extract `sinon.behavior` into a CommonJS module
+  * Extract `sinon.walk` into a CommonJS module.
+  * Export stub as a CommonJS module
+  * Import `wrapMethod` as a CommonJS module
+  * Import core dependencies as CommonJS modules
+  * Delete .jscsrc
   * Ensure sinon can run in a  WebWorker
-  * Changed the priority of which global is chosen first.
-  * Fixed #785 by checking the global variables are set
-
-1.17.2 / 2015-10-21
-==================
-
+  * Updated docs to reflect that calledOn accepts a matcher
+  * simplified test and added a note
+  * updated to require spy in its new cjs form
+  * ./commonjs
+  * expose sinon.spy and sinon.spyCall
+  * converted spy to commonjs format
+  * moved sinon.format() to core
+  * fixed spy tests
+  * added missing test (pushes spy coverage to 100%)
+  * added spy getter/setter tests
+  * updated sinon.spy() to properly handle getters and setters
+  * Remove unnecessary error variable
+  * Prevent stubbed getter from being called during restore() - fixes #897
+  * Allowed GET requests to have request bodies
+  * Remove JSCS from devDependencies
+  * Add Gitter badge
+  * Allow yieldsOn, callsArgOn, callsArgOnWith, yieldsToOn to use any context
+  * Add bithound badge to README.md
+  * removed switch statement in favor of object lookup
+  * Use immediate exceptions
+  * lib/sinon/util: Remove window conditionals from IE files.
+  * Add docs for sandbox and utils
+  * Add documentation for matchers
+  * Add docs for assertions
+  * Add docs for JSON-P
+  * Add docs for fake server
+  * Add docs for fake timers
+  * Add mock api descriptions
+  * Add mocks introduction
+  * Add stubs api
+  * Update TODO
+  * Use Object.prototype.hasOwnProperty in deepEqual to cope with cases where hasOwnProperty doesn't exist, ie. Object.create(null), or has been overridden on an object. With tests.
+  * Add docs TODO to track outstanding tasks
+  * Add stubs.md with introduction to stubs
+  * Import docs
+  * Fix #875 Proper support UTF8 payloads * introduced new dependency "text-encoding" * delegate encoding operations to TextEncoder/TextDecoder * added unit test to verify proper utf-8 encoding
+  * finished eslint'ing
+  * upgraded ESLint to 1.7.1 (latest and greatest)
+  * Run tests in node 4.2 LTS (Argon)
+  * removed unneeded path resolution
+  * Let npm install handle buster again, now that we have caching of node_modules
+  * Make travis cache node_modules to speed up builds
+  * removed duplicate implementation of sinon.timesInWords
+  * fix travis-ci build svg in README
+  * reviewer comments
+  * cleaning up left over blank lines
+  * CommonJS-ified *some* of the things
+  * updated readyStateChange to align to the w3c spec (somewhat)
+  * cleaned up a few unreleated tests
+  * updated tests to reflect reality
+  * added some additional progress event verification
+  * added a test to ensure load is not fired before abort
+  * added test to ensure event ordering
+  * allow progress events with loaded/total values of 0
   * Fix #867: Walk properties only once
-
-1.17.1 / 2015-09-26
-==================
-
+  * Removed unnecessary module wrappers and double test run in NodeJS.
+  * null-check the object passed to sinon.stub
+  * implemented stub#resetHistory method - fixes #863
   * Fix #851: Do not attempt to re-stub constructors
   * Fix #847: Ensure walk invokes accessors directly on target
   * Run tests in node 4.1.x also
+  * stub.reset also resets behavior
 
 1.17.0 / 2015-09-22
 ==================
@@ -358,7 +780,7 @@ v1.17.4 / 2016-05-02
 * New methods stub.callsArgOn, stub.callsArgOnWith,
   stub.yieldsOn, stub.yieldsToOn
 * Implemented
-* Fixing `clearTimeout` to not throw when called for nonexistant IDs.
+* Fixing `clearTimeout` to not throw when called for nonexistent IDs.
 * Spys that are created using 'withArgs' now get initialized with previous
   calls to the original spy.
 * Minor bug fixes and docs cleanup.

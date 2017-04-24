@@ -27,7 +27,42 @@ This bot demonstrates many of the core features of Botkit:
 
     token=<MY TOKEN> node slack_bot.js
 
+# USE THE BOT:
+
+  Find your bot inside Slack to send it a direct message.
+
+  Say: "Hello"
+
+  The bot will reply "Hello!"
+
+  Say: "who are you?"
+
+  The bot will tell you its name, where it is running, and for how long.
+
+  Say: "Call me <nickname>"
+
+  Tell the bot your nickname. Now you are friends.
+
+  Say: "who am I?"
+
+  The bot will tell you your nickname, if it knows one for you.
+
+  Say: "shutdown"
+
+  The bot will ask if you are sure, and then shut itself down.
+
+  Make sure to invite your bot into other channels using /invite @<my bot>!
+
+# EXTEND THE BOT:
+
+  Botkit has many features for building cool and useful bots!
+
+  Read all about it here:
+
+    -> http://howdy.ai/botkit
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
 
 if (!process.env.token) {
     console.log('Error: Specify token in environment');
@@ -36,8 +71,6 @@ if (!process.env.token) {
 
 var Botkit = require('./lib/Botkit.js');
 var os = require('os');
-var output = '';
-var response_context = {};
 
 var controller = Botkit.slackbot({
     debug: true,
@@ -47,45 +80,6 @@ var bot = controller.spawn({
     token: process.env.token
 }).startRTM();
 
-var Conversation = require('watson-developer-cloud/conversation/v1');
-
-// Set up Conversation service wrapper.
-var conversation = new Conversation({
-  username: '09b163d0-b27a-42c4-97a7-b29aa366411b',
-  password: 'FFVYAzx7fSYb',
-  path: { workspace_id: '05f4529a-6773-4a5d-9999-e13015180a5a' },
-  url: 'https://gateway.watsonplatform.net/conversation/api',
-  version_date: '2016-10-21',
-  version: 'v1'
-});
-
-// Start conversation with empty message.
-conversation.message({}, processResponse);
-
-function processResponse(err, response) {
-    // If an intent was detected, log it out to the console.
-    if (response.intents.length > 0) {
-        console.log('Detected intent: #' + response.intents[0].intent);
-    }
-
-    bot.say({
-        text: response.output.text[0],
-        channel: '#cs421' 
-    });
-
-    response_context = response.context;
-}
-
-controller.on('ambient', function(bot, message) {
-    conversation.message({
-        input: { text: message.text },
-        context: response_context
-      }, 
-      processResponse
-    );
-})
-
-/*
 controller.hears(['hello', 'hi'], 'direct_message,direct_mention,mention', function(bot, message) {
 
     bot.api.reactions.add({
@@ -107,20 +101,6 @@ controller.hears(['hello', 'hi'], 'direct_message,direct_mention,mention', funct
         }
     });
 });
-
-controller.on('channel_joined',function(bot,message) {
-    bot.say({
-        text: 'Hi everyone, I am bot @421. Nice to meet you all.',
-        channel: '#cs421' 
-    });
-})
-
-controller.on('channel_leave',function(bot,message) {
-    bot.say({
-        text: 'Gotta leave now. Take care, everyone!!!',
-        channel: '#cs421' 
-    });
-})
 
 controller.hears(['call me (.*)', 'my name is (.*)'], 'direct_message,direct_mention,mention', function(bot, message) {
     var name = message.match[1];
@@ -205,6 +185,7 @@ controller.hears(['what is my name', 'who am i'], 'direct_message,direct_mention
     });
 });
 
+
 controller.hears(['shutdown'], 'direct_message,direct_mention,mention', function(bot, message) {
 
     bot.startConversation(message, function(err, convo) {
@@ -244,7 +225,6 @@ controller.hears(['uptime', 'identify yourself', 'who are you', 'what is your na
              '>. I have been running for ' + uptime + ' on ' + hostname + '.');
 
     });
-*/
 
 function formatUptime(uptime) {
     var unit = 'second';

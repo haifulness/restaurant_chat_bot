@@ -1,739 +1,645 @@
-/**
- * @depend core.js
- * @depend ../extend.js
- * @depend event.js
- * @depend ../log_error.js
- */
-/**
- * Fake XMLHttpRequest object
- *
- * @author Christian Johansen (christian@cjohansen.no)
- * @license BSD
- *
- * Copyright (c) 2010-2013 Christian Johansen
- */
-(function (sinonGlobal, global) {
-    "use strict";
+"use strict";
 
-    function getWorkingXHR(globalScope) {
-        var supportsXHR = typeof globalScope.XMLHttpRequest !== "undefined";
-        if (supportsXHR) {
-            return globalScope.XMLHttpRequest;
-        }
+var TextEncoder = require("text-encoding").TextEncoder;
 
-        var supportsActiveX = typeof globalScope.ActiveXObject !== "undefined";
-        if (supportsActiveX) {
-            return function () {
-                return new globalScope.ActiveXObject("MSXML2.XMLHTTP.3.0");
-            };
-        }
+var configureLogError = require("./core/log_error");
+var sinonEvent = require("./event");
+var extend = require("./core/extend");
 
-        return false;
+function getWorkingXHR(globalScope) {
+    var supportsXHR = typeof globalScope.XMLHttpRequest !== "undefined";
+    if (supportsXHR) {
+        return globalScope.XMLHttpRequest;
     }
 
-    var supportsProgress = typeof ProgressEvent !== "undefined";
-    var supportsCustomEvent = typeof CustomEvent !== "undefined";
-    var supportsFormData = typeof FormData !== "undefined";
-    var supportsArrayBuffer = typeof ArrayBuffer !== "undefined";
-    var supportsBlob = (function () {
-        try {
-            return !!new Blob();
-        } catch (e) {
-            return false;
-        }
-    })();
-    var sinonXhr = { XMLHttpRequest: global.XMLHttpRequest };
-    sinonXhr.GlobalXMLHttpRequest = global.XMLHttpRequest;
-    sinonXhr.GlobalActiveXObject = global.ActiveXObject;
-    sinonXhr.supportsActiveX = typeof sinonXhr.GlobalActiveXObject !== "undefined";
-    sinonXhr.supportsXHR = typeof sinonXhr.GlobalXMLHttpRequest !== "undefined";
-    sinonXhr.workingXHR = getWorkingXHR(global);
-    sinonXhr.supportsCORS = sinonXhr.supportsXHR && "withCredentials" in (new sinonXhr.GlobalXMLHttpRequest());
-
-    var unsafeHeaders = {
-        "Accept-Charset": true,
-        "Accept-Encoding": true,
-        Connection: true,
-        "Content-Length": true,
-        Cookie: true,
-        Cookie2: true,
-        "Content-Transfer-Encoding": true,
-        Date: true,
-        Expect: true,
-        Host: true,
-        "Keep-Alive": true,
-        Referer: true,
-        TE: true,
-        Trailer: true,
-        "Transfer-Encoding": true,
-        Upgrade: true,
-        "User-Agent": true,
-        Via: true
-    };
-
-    // An upload object is created for each
-    // FakeXMLHttpRequest and allows upload
-    // events to be simulated using uploadProgress
-    // and uploadError.
-    function UploadProgress() {
-        this.eventListeners = {
-            abort: [],
-            error: [],
-            load: [],
-            loadend: [],
-            progress: []
+    var supportsActiveX = typeof globalScope.ActiveXObject !== "undefined";
+    if (supportsActiveX) {
+        return function () {
+            return new globalScope.ActiveXObject("MSXML2.XMLHTTP.3.0");
         };
     }
 
-    UploadProgress.prototype.addEventListener = function addEventListener(event, listener) {
-        this.eventListeners[event].push(listener);
-    };
+    return false;
+}
 
-    UploadProgress.prototype.removeEventListener = function removeEventListener(event, listener) {
-        var listeners = this.eventListeners[event] || [];
+var supportsProgress = typeof ProgressEvent !== "undefined";
+var supportsCustomEvent = typeof CustomEvent !== "undefined";
+var supportsFormData = typeof FormData !== "undefined";
+var supportsArrayBuffer = typeof ArrayBuffer !== "undefined";
+var supportsBlob = require("../blob").isSupported;
+var isReactNative = global.navigator && global.navigator.product === "ReactNative";
+var sinonXhr = { XMLHttpRequest: global.XMLHttpRequest };
+sinonXhr.GlobalXMLHttpRequest = global.XMLHttpRequest;
+sinonXhr.GlobalActiveXObject = global.ActiveXObject;
+sinonXhr.supportsActiveX = typeof sinonXhr.GlobalActiveXObject !== "undefined";
+sinonXhr.supportsXHR = typeof sinonXhr.GlobalXMLHttpRequest !== "undefined";
+sinonXhr.workingXHR = getWorkingXHR(global);
+sinonXhr.supportsCORS = isReactNative ||
+    (sinonXhr.supportsXHR && "withCredentials" in (new sinonXhr.GlobalXMLHttpRequest()));
 
-        for (var i = 0, l = listeners.length; i < l; ++i) {
-            if (listeners[i] === listener) {
-                return listeners.splice(i, 1);
+var unsafeHeaders = {
+    "Accept-Charset": true,
+    "Accept-Encoding": true,
+    "Connection": true,
+    "Content-Length": true,
+    "Cookie": true,
+    "Cookie2": true,
+    "Content-Transfer-Encoding": true,
+    "Date": true,
+    "Expect": true,
+    "Host": true,
+    "Keep-Alive": true,
+    "Referer": true,
+    "TE": true,
+    "Trailer": true,
+    "Transfer-Encoding": true,
+    "Upgrade": true,
+    "User-Agent": true,
+    "Via": true
+};
+
+
+function EventTargetHandler() {
+    var self = this;
+    var events = ["loadstart", "progress", "abort", "error", "load", "timeout", "loadend"];
+
+    function addEventListener(eventName) {
+        self.addEventListener(eventName, function (event) {
+            var listener = self["on" + eventName];
+
+            if (listener && typeof listener === "function") {
+                listener.call(this, event);
             }
-        }
-    };
-
-    UploadProgress.prototype.dispatchEvent = function dispatchEvent(event) {
-        var listeners = this.eventListeners[event.type] || [];
-
-        for (var i = 0, listener; (listener = listeners[i]) != null; i++) {
-            listener(event);
-        }
-    };
-
-    // Note that for FakeXMLHttpRequest to work pre ES5
-    // we lose some of the alignment with the spec.
-    // To ensure as close a match as possible,
-    // set responseType before calling open, send or respond;
-    function FakeXMLHttpRequest() {
-        this.readyState = FakeXMLHttpRequest.UNSENT;
-        this.requestHeaders = {};
-        this.requestBody = null;
-        this.status = 0;
-        this.statusText = "";
-        this.upload = new UploadProgress();
-        this.responseType = "";
-        this.response = "";
-        if (sinonXhr.supportsCORS) {
-            this.withCredentials = false;
-        }
-
-        var xhr = this;
-        var events = ["loadstart", "load", "abort", "error", "loadend"];
-
-        function addEventListener(eventName) {
-            xhr.addEventListener(eventName, function (event) {
-                var listener = xhr["on" + eventName];
-
-                if (listener && typeof listener === "function") {
-                    listener.call(this, event);
-                }
-            });
-        }
-
-        for (var i = events.length - 1; i >= 0; i--) {
-            addEventListener(events[i]);
-        }
-
-        if (typeof FakeXMLHttpRequest.onCreate === "function") {
-            FakeXMLHttpRequest.onCreate(this);
-        }
+        });
     }
 
-    function verifyState(xhr) {
-        if (xhr.readyState !== FakeXMLHttpRequest.OPENED) {
-            throw new Error("INVALID_STATE_ERR");
-        }
+    events.forEach(addEventListener);
+}
 
-        if (xhr.sendFlag) {
-            throw new Error("INVALID_STATE_ERR");
-        }
+EventTargetHandler.prototype = sinonEvent.EventTarget;
+
+// Note that for FakeXMLHttpRequest to work pre ES5
+// we lose some of the alignment with the spec.
+// To ensure as close a match as possible,
+// set responseType before calling open, send or respond;
+function FakeXMLHttpRequest(config) {
+    EventTargetHandler.call(this);
+    this.readyState = FakeXMLHttpRequest.UNSENT;
+    this.requestHeaders = {};
+    this.requestBody = null;
+    this.status = 0;
+    this.statusText = "";
+    this.upload = new EventTargetHandler();
+    this.responseType = "";
+    this.response = "";
+    this.logError = configureLogError(config);
+    if (sinonXhr.supportsCORS) {
+        this.withCredentials = false;
     }
 
-    function getHeader(headers, header) {
-        header = header.toLowerCase();
+    if (typeof FakeXMLHttpRequest.onCreate === "function") {
+        FakeXMLHttpRequest.onCreate(this);
+    }
+}
 
-        for (var h in headers) {
-            if (h.toLowerCase() === header) {
-                return h;
-            }
-        }
-
-        return null;
+function verifyState(xhr) {
+    if (xhr.readyState !== FakeXMLHttpRequest.OPENED) {
+        throw new Error("INVALID_STATE_ERR");
     }
 
-    // filtering to enable a white-list version of Sinon FakeXhr,
-    // where whitelisted requests are passed through to real XHR
-    function each(collection, callback) {
-        if (!collection) {
-            return;
-        }
+    if (xhr.sendFlag) {
+        throw new Error("INVALID_STATE_ERR");
+    }
+}
 
-        for (var i = 0, l = collection.length; i < l; i += 1) {
-            callback(collection[i]);
-        }
-    }
-    function some(collection, callback) {
-        for (var index = 0; index < collection.length; index++) {
-            if (callback(collection[index]) === true) {
-                return true;
-            }
-        }
-        return false;
-    }
-    // largest arity in XHR is 5 - XHR#open
-    var apply = function (obj, method, args) {
-        switch (args.length) {
+function getHeader(headers, header) {
+    var foundHeader = Object.keys(headers).filter(function (h) {
+        return h.toLowerCase() === header.toLowerCase();
+    });
+
+    return foundHeader[0] || null;
+}
+
+function excludeSetCookie2Header(header) {
+    return !/^Set-Cookie2?$/i.test(header);
+}
+
+// largest arity in XHR is 5 - XHR#open
+var apply = function (obj, method, args) {
+    switch (args.length) {
         case 0: return obj[method]();
         case 1: return obj[method](args[0]);
         case 2: return obj[method](args[0], args[1]);
         case 3: return obj[method](args[0], args[1], args[2]);
         case 4: return obj[method](args[0], args[1], args[2], args[3]);
         case 5: return obj[method](args[0], args[1], args[2], args[3], args[4]);
+        default: throw new Error("Unhandled case");
+    }
+};
+
+FakeXMLHttpRequest.filters = [];
+FakeXMLHttpRequest.addFilter = function addFilter(fn) {
+    this.filters.push(fn);
+};
+FakeXMLHttpRequest.defake = function defake(fakeXhr, xhrArgs) {
+    var xhr = new sinonXhr.workingXHR(); // eslint-disable-line new-cap
+
+    [
+        "open",
+        "setRequestHeader",
+        "send",
+        "abort",
+        "getResponseHeader",
+        "getAllResponseHeaders",
+        "addEventListener",
+        "overrideMimeType",
+        "removeEventListener"
+    ].forEach(function (method) {
+        fakeXhr[method] = function () {
+            return apply(xhr, method, arguments);
+        };
+    });
+
+    var copyAttrs = function (args) {
+        args.forEach(function (attr) {
+            fakeXhr[attr] = xhr[attr];
+        });
+    };
+
+    var stateChange = function stateChange() {
+        fakeXhr.readyState = xhr.readyState;
+        if (xhr.readyState >= FakeXMLHttpRequest.HEADERS_RECEIVED) {
+            copyAttrs(["status", "statusText"]);
+        }
+        if (xhr.readyState >= FakeXMLHttpRequest.LOADING) {
+            copyAttrs(["responseText", "response"]);
+        }
+        if (xhr.readyState === FakeXMLHttpRequest.DONE) {
+            copyAttrs(["responseXML"]);
+        }
+        if (fakeXhr.onreadystatechange) {
+            fakeXhr.onreadystatechange.call(fakeXhr, { target: fakeXhr });
         }
     };
 
-    FakeXMLHttpRequest.filters = [];
-    FakeXMLHttpRequest.addFilter = function addFilter(fn) {
-        this.filters.push(fn);
-    };
-    var IE6Re = /MSIE 6/;
-    FakeXMLHttpRequest.defake = function defake(fakeXhr, xhrArgs) {
-        var xhr = new sinonXhr.workingXHR(); // eslint-disable-line new-cap
-
-        each([
-            "open",
-            "setRequestHeader",
-            "send",
-            "abort",
-            "getResponseHeader",
-            "getAllResponseHeaders",
-            "addEventListener",
-            "overrideMimeType",
-            "removeEventListener"
-        ], function (method) {
-            fakeXhr[method] = function () {
-                return apply(xhr, method, arguments);
-            };
+    if (xhr.addEventListener) {
+        Object.keys(fakeXhr.eventListeners).forEach(function (event) {
+            /*eslint-disable no-loop-func*/
+            fakeXhr.eventListeners[event].forEach(function (handler) {
+                xhr.addEventListener(event, handler);
+            });
+            /*eslint-enable no-loop-func*/
         });
 
-        var copyAttrs = function (args) {
-            each(args, function (attr) {
-                try {
-                    fakeXhr[attr] = xhr[attr];
-                } catch (e) {
-                    if (!IE6Re.test(navigator.userAgent)) {
-                        throw e;
-                    }
-                }
-            });
-        };
-
-        var stateChange = function stateChange() {
-            fakeXhr.readyState = xhr.readyState;
-            if (xhr.readyState >= FakeXMLHttpRequest.HEADERS_RECEIVED) {
-                copyAttrs(["status", "statusText"]);
-            }
-            if (xhr.readyState >= FakeXMLHttpRequest.LOADING) {
-                copyAttrs(["responseText", "response"]);
-            }
-            if (xhr.readyState === FakeXMLHttpRequest.DONE) {
-                copyAttrs(["responseXML"]);
-            }
-            if (fakeXhr.onreadystatechange) {
-                fakeXhr.onreadystatechange.call(fakeXhr, { target: fakeXhr });
-            }
-        };
-
-        if (xhr.addEventListener) {
-            for (var event in fakeXhr.eventListeners) {
-                if (fakeXhr.eventListeners.hasOwnProperty(event)) {
-
-                    /*eslint-disable no-loop-func*/
-                    each(fakeXhr.eventListeners[event], function (handler) {
-                        xhr.addEventListener(event, handler);
-                    });
-                    /*eslint-enable no-loop-func*/
-                }
-            }
-            xhr.addEventListener("readystatechange", stateChange);
-        } else {
-            xhr.onreadystatechange = stateChange;
-        }
-        apply(xhr, "open", xhrArgs);
-    };
-    FakeXMLHttpRequest.useFilters = false;
-
-    function verifyRequestOpened(xhr) {
-        if (xhr.readyState !== FakeXMLHttpRequest.OPENED) {
-            throw new Error("INVALID_STATE_ERR - " + xhr.readyState);
-        }
+        xhr.addEventListener("readystatechange", stateChange);
+    } else {
+        xhr.onreadystatechange = stateChange;
     }
+    apply(xhr, "open", xhrArgs);
+};
+FakeXMLHttpRequest.useFilters = false;
 
-    function verifyRequestSent(xhr) {
-        if (xhr.readyState === FakeXMLHttpRequest.DONE) {
-            throw new Error("Request done");
-        }
+function verifyRequestOpened(xhr) {
+    if (xhr.readyState !== FakeXMLHttpRequest.OPENED) {
+        throw new Error("INVALID_STATE_ERR - " + xhr.readyState);
     }
+}
 
-    function verifyHeadersReceived(xhr) {
-        if (xhr.async && xhr.readyState !== FakeXMLHttpRequest.HEADERS_RECEIVED) {
-            throw new Error("No headers received");
-        }
+function verifyRequestSent(xhr) {
+    if (xhr.readyState === FakeXMLHttpRequest.DONE) {
+        throw new Error("Request done");
     }
+}
 
-    function verifyResponseBodyType(body) {
-        if (typeof body !== "string") {
-            var error = new Error("Attempted to respond to fake XMLHttpRequest with " +
-                                 body + ", which is not a string.");
-            error.name = "InvalidBodyException";
-            throw error;
-        }
+function verifyHeadersReceived(xhr) {
+    if (xhr.async && xhr.readyState !== FakeXMLHttpRequest.HEADERS_RECEIVED) {
+        throw new Error("No headers received");
     }
+}
 
-    function convertToArrayBuffer(body) {
-        var buffer = new ArrayBuffer(body.length);
-        var view = new Uint8Array(buffer);
-        for (var i = 0; i < body.length; i++) {
-            var charCode = body.charCodeAt(i);
-            if (charCode >= 256) {
-                throw new TypeError("arraybuffer or blob responseTypes require binary string, " +
-                                    "invalid character " + body[i] + " found.");
-            }
-            view[i] = charCode;
-        }
-        return buffer;
+function verifyResponseBodyType(body) {
+    if (typeof body !== "string") {
+        var error = new Error("Attempted to respond to fake XMLHttpRequest with " +
+                             body + ", which is not a string.");
+        error.name = "InvalidBodyException";
+        throw error;
     }
+}
 
-    function isXmlContentType(contentType) {
-        return !contentType || /(text\/xml)|(application\/xml)|(\+xml)/.test(contentType);
-    }
+function convertToArrayBuffer(body, encoding) {
+    return new TextEncoder(encoding || "utf-8").encode(body).buffer;
+}
 
-    function convertResponseBody(responseType, contentType, body) {
-        if (responseType === "" || responseType === "text") {
-            return body;
-        } else if (supportsArrayBuffer && responseType === "arraybuffer") {
-            return convertToArrayBuffer(body);
-        } else if (responseType === "json") {
-            try {
-                return JSON.parse(body);
-            } catch (e) {
-                // Return parsing failure as null
-                return null;
-            }
-        } else if (supportsBlob && responseType === "blob") {
-            var blobOptions = {};
-            if (contentType) {
-                blobOptions.type = contentType;
-            }
-            return new Blob([convertToArrayBuffer(body)], blobOptions);
-        } else if (responseType === "document") {
-            if (isXmlContentType(contentType)) {
-                return FakeXMLHttpRequest.parseXML(body);
-            }
+function isXmlContentType(contentType) {
+    return !contentType || /(text\/xml)|(application\/xml)|(\+xml)/.test(contentType);
+}
+
+function convertResponseBody(responseType, contentType, body) {
+    if (responseType === "" || responseType === "text") {
+        return body;
+    } else if (supportsArrayBuffer && responseType === "arraybuffer") {
+        return convertToArrayBuffer(body);
+    } else if (responseType === "json") {
+        try {
+            return JSON.parse(body);
+        } catch (e) {
+            // Return parsing failure as null
             return null;
         }
-        throw new Error("Invalid responseType " + responseType);
-    }
-
-    function clearResponse(xhr) {
-        if (xhr.responseType === "" || xhr.responseType === "text") {
-            xhr.response = xhr.responseText = "";
-        } else {
-            xhr.response = xhr.responseText = null;
+    } else if (supportsBlob && responseType === "blob") {
+        var blobOptions = {};
+        if (contentType) {
+            blobOptions.type = contentType;
         }
-        xhr.responseXML = null;
-    }
-
-    FakeXMLHttpRequest.parseXML = function parseXML(text) {
-        // Treat empty string as parsing failure
-        if (text !== "") {
-            try {
-                if (typeof DOMParser !== "undefined") {
-                    var parser = new DOMParser();
-                    return parser.parseFromString(text, "text/xml");
-                }
-                var xmlDoc = new window.ActiveXObject("Microsoft.XMLDOM");
-                xmlDoc.async = "false";
-                xmlDoc.loadXML(text);
-                return xmlDoc;
-            } catch (e) {
-                // Unable to parse XML - no biggie
-            }
+        return new Blob([convertToArrayBuffer(body)], blobOptions);
+    } else if (responseType === "document") {
+        if (isXmlContentType(contentType)) {
+            return FakeXMLHttpRequest.parseXML(body);
         }
-
         return null;
-    };
+    }
+    throw new Error("Invalid responseType " + responseType);
+}
 
-    FakeXMLHttpRequest.statusCodes = {
-        100: "Continue",
-        101: "Switching Protocols",
-        200: "OK",
-        201: "Created",
-        202: "Accepted",
-        203: "Non-Authoritative Information",
-        204: "No Content",
-        205: "Reset Content",
-        206: "Partial Content",
-        207: "Multi-Status",
-        300: "Multiple Choice",
-        301: "Moved Permanently",
-        302: "Found",
-        303: "See Other",
-        304: "Not Modified",
-        305: "Use Proxy",
-        307: "Temporary Redirect",
-        400: "Bad Request",
-        401: "Unauthorized",
-        402: "Payment Required",
-        403: "Forbidden",
-        404: "Not Found",
-        405: "Method Not Allowed",
-        406: "Not Acceptable",
-        407: "Proxy Authentication Required",
-        408: "Request Timeout",
-        409: "Conflict",
-        410: "Gone",
-        411: "Length Required",
-        412: "Precondition Failed",
-        413: "Request Entity Too Large",
-        414: "Request-URI Too Long",
-        415: "Unsupported Media Type",
-        416: "Requested Range Not Satisfiable",
-        417: "Expectation Failed",
-        422: "Unprocessable Entity",
-        500: "Internal Server Error",
-        501: "Not Implemented",
-        502: "Bad Gateway",
-        503: "Service Unavailable",
-        504: "Gateway Timeout",
-        505: "HTTP Version Not Supported"
-    };
+function clearResponse(xhr) {
+    if (xhr.responseType === "" || xhr.responseType === "text") {
+        xhr.response = xhr.responseText = "";
+    } else {
+        xhr.response = xhr.responseText = null;
+    }
+    xhr.responseXML = null;
+}
 
-    function makeApi(sinon) {
-        sinon.xhr = sinonXhr;
+FakeXMLHttpRequest.parseXML = function parseXML(text) {
+    // Treat empty string as parsing failure
+    if (text !== "") {
+        try {
+            if (typeof DOMParser !== "undefined") {
+                var parser = new DOMParser();
+                return parser.parseFromString(text, "text/xml");
+            }
+            var xmlDoc = new window.ActiveXObject("Microsoft.XMLDOM");
+            xmlDoc.async = "false";
+            xmlDoc.loadXML(text);
+            return xmlDoc;
+        } catch (e) {
+            // Unable to parse XML - no biggie
+        }
+    }
 
-        sinon.extend(FakeXMLHttpRequest.prototype, sinon.EventTarget, {
-            async: true,
+    return null;
+};
 
-            open: function open(method, url, async, username, password) {
-                this.method = method;
-                this.url = url;
-                this.async = typeof async === "boolean" ? async : true;
-                this.username = username;
-                this.password = password;
-                clearResponse(this);
-                this.requestHeaders = {};
-                this.sendFlag = false;
+FakeXMLHttpRequest.statusCodes = {
+    100: "Continue",
+    101: "Switching Protocols",
+    200: "OK",
+    201: "Created",
+    202: "Accepted",
+    203: "Non-Authoritative Information",
+    204: "No Content",
+    205: "Reset Content",
+    206: "Partial Content",
+    207: "Multi-Status",
+    300: "Multiple Choice",
+    301: "Moved Permanently",
+    302: "Found",
+    303: "See Other",
+    304: "Not Modified",
+    305: "Use Proxy",
+    307: "Temporary Redirect",
+    400: "Bad Request",
+    401: "Unauthorized",
+    402: "Payment Required",
+    403: "Forbidden",
+    404: "Not Found",
+    405: "Method Not Allowed",
+    406: "Not Acceptable",
+    407: "Proxy Authentication Required",
+    408: "Request Timeout",
+    409: "Conflict",
+    410: "Gone",
+    411: "Length Required",
+    412: "Precondition Failed",
+    413: "Request Entity Too Large",
+    414: "Request-URI Too Long",
+    415: "Unsupported Media Type",
+    416: "Requested Range Not Satisfiable",
+    417: "Expectation Failed",
+    422: "Unprocessable Entity",
+    500: "Internal Server Error",
+    501: "Not Implemented",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+    504: "Gateway Timeout",
+    505: "HTTP Version Not Supported"
+};
 
-                if (FakeXMLHttpRequest.useFilters === true) {
-                    var xhrArgs = arguments;
-                    var defake = some(FakeXMLHttpRequest.filters, function (filter) {
-                        return filter.apply(this, xhrArgs);
-                    });
-                    if (defake) {
-                        return FakeXMLHttpRequest.defake(this, arguments);
-                    }
-                }
-                this.readyStateChange(FakeXMLHttpRequest.OPENED);
-            },
+extend(FakeXMLHttpRequest.prototype, sinonEvent.EventTarget, {
+    async: true,
 
-            readyStateChange: function readyStateChange(state) {
-                this.readyState = state;
+    open: function open(method, url, async, username, password) {
+        this.method = method;
+        this.url = url;
+        this.async = typeof async === "boolean" ? async : true;
+        this.username = username;
+        this.password = password;
+        clearResponse(this);
+        this.requestHeaders = {};
+        this.sendFlag = false;
 
-                var readyStateChangeEvent = new sinon.Event("readystatechange", false, false, this);
-                var event, progress;
+        if (FakeXMLHttpRequest.useFilters === true) {
+            var xhrArgs = arguments;
+            var defake = FakeXMLHttpRequest.filters.some(function (filter) {
+                return filter.apply(this, xhrArgs);
+            });
+            if (defake) {
+                FakeXMLHttpRequest.defake(this, arguments);
+                return;
+            }
+        }
+        this.readyStateChange(FakeXMLHttpRequest.OPENED);
+    },
 
-                if (typeof this.onreadystatechange === "function") {
-                    try {
-                        this.onreadystatechange(readyStateChangeEvent);
-                    } catch (e) {
-                        sinon.logError("Fake XHR onreadystatechange handler", e);
-                    }
-                }
+    readyStateChange: function readyStateChange(state) {
+        this.readyState = state;
 
-                if (this.readyState === FakeXMLHttpRequest.DONE) {
-                    // ensure loaded and total are numbers
-                    progress = {
-                      loaded: this.progress || 0,
-                      total: this.progress || 0
-                    };
+        var readyStateChangeEvent = new sinonEvent.Event("readystatechange", false, false, this);
+        var event, progress;
 
-                    if (this.status === 0) {
-                        event = this.aborted ? "abort" : "error";
-                    }
-                    else {
-                        event = "load";
-                    }
+        if (typeof this.onreadystatechange === "function") {
+            try {
+                this.onreadystatechange(readyStateChangeEvent);
+            } catch (e) {
+                this.logError("Fake XHR onreadystatechange handler", e);
+            }
+        }
 
-                    if (supportsProgress) {
-                        this.upload.dispatchEvent(new sinon.ProgressEvent("progress", progress, this));
-                        this.upload.dispatchEvent(new sinon.ProgressEvent(event, progress, this));
-                        this.upload.dispatchEvent(new sinon.ProgressEvent("loadend", progress, this));
-                    }
+        if (this.readyState === FakeXMLHttpRequest.DONE) {
+            if (this.aborted || this.status === 0) {
+                progress = {loaded: 0, total: 0};
+                event = this.aborted ? "abort" : "error";
+            } else {
+                progress = {loaded: 100, total: 100};
+                event = "load";
+            }
 
-                    this.dispatchEvent(new sinon.ProgressEvent("progress", progress, this));
-                    this.dispatchEvent(new sinon.ProgressEvent(event, progress, this));
-                    this.dispatchEvent(new sinon.ProgressEvent("loadend", progress, this));
-                }
+            if (supportsProgress) {
+                this.upload.dispatchEvent(new sinonEvent.ProgressEvent("progress", progress, this));
+                this.upload.dispatchEvent(new sinonEvent.ProgressEvent(event, progress, this));
+                this.upload.dispatchEvent(new sinonEvent.ProgressEvent("loadend", progress, this));
+            }
 
-                this.dispatchEvent(readyStateChangeEvent);
-            },
+            this.dispatchEvent(new sinonEvent.ProgressEvent("progress", progress, this));
+            this.dispatchEvent(new sinonEvent.ProgressEvent(event, progress, this));
+            this.dispatchEvent(new sinonEvent.ProgressEvent("loadend", progress, this));
+        }
 
-            setRequestHeader: function setRequestHeader(header, value) {
-                verifyState(this);
+        this.dispatchEvent(readyStateChangeEvent);
+    },
 
-                if (unsafeHeaders[header] || /^(Sec-|Proxy-)/.test(header)) {
-                    throw new Error("Refused to set unsafe header \"" + header + "\"");
-                }
+    setRequestHeader: function setRequestHeader(header, value) {
+        verifyState(this);
 
-                if (this.requestHeaders[header]) {
-                    this.requestHeaders[header] += "," + value;
-                } else {
-                    this.requestHeaders[header] = value;
-                }
-            },
+        var checkUnsafeHeaders = true;
+        if (typeof this.unsafeHeadersEnabled === "function") {
+            checkUnsafeHeaders = this.unsafeHeadersEnabled();
+        }
 
-            // Helps testing
-            setResponseHeaders: function setResponseHeaders(headers) {
-                verifyRequestOpened(this);
-                this.responseHeaders = {};
+        if (checkUnsafeHeaders && (unsafeHeaders[header] || /^(Sec-|Proxy-)/.test(header))) {
+            throw new Error("Refused to set unsafe header \"" + header + "\"");
+        }
 
-                for (var header in headers) {
-                    if (headers.hasOwnProperty(header)) {
-                        this.responseHeaders[header] = headers[header];
-                    }
-                }
+        if (this.requestHeaders[header]) {
+            this.requestHeaders[header] += "," + value;
+        } else {
+            this.requestHeaders[header] = value;
+        }
+    },
 
-                if (this.async) {
-                    this.readyStateChange(FakeXMLHttpRequest.HEADERS_RECEIVED);
-                } else {
-                    this.readyState = FakeXMLHttpRequest.HEADERS_RECEIVED;
-                }
-            },
+    setStatus: function setStatus(status) {
+        var sanitizedStatus = typeof status === "number" ? status : 200;
 
-            // Currently treats ALL data as a DOMString (i.e. no Document)
-            send: function send(data) {
-                verifyState(this);
+        verifyRequestOpened(this);
+        this.status = sanitizedStatus;
+        this.statusText = FakeXMLHttpRequest.statusCodes[sanitizedStatus];
+    },
 
-                if (!/^(get|head)$/i.test(this.method)) {
-                    var contentType = getHeader(this.requestHeaders, "Content-Type");
-                    if (this.requestHeaders[contentType]) {
-                        var value = this.requestHeaders[contentType].split(";");
-                        this.requestHeaders[contentType] = value[0] + ";charset=utf-8";
-                    } else if (supportsFormData && !(data instanceof FormData)) {
-                        this.requestHeaders["Content-Type"] = "text/plain;charset=utf-8";
-                    }
+    // Helps testing
+    setResponseHeaders: function setResponseHeaders(headers) {
+        verifyRequestOpened(this);
 
-                    this.requestBody = data;
-                }
+        var responseHeaders = this.responseHeaders = {};
 
-                this.errorFlag = false;
-                this.sendFlag = this.async;
-                clearResponse(this);
-                this.readyStateChange(FakeXMLHttpRequest.OPENED);
+        Object.keys(headers).forEach(function (header) {
+            responseHeaders[header] = headers[header];
+        });
 
-                if (typeof this.onSend === "function") {
-                    this.onSend(this);
-                }
+        if (this.async) {
+            this.readyStateChange(FakeXMLHttpRequest.HEADERS_RECEIVED);
+        } else {
+            this.readyState = FakeXMLHttpRequest.HEADERS_RECEIVED;
+        }
+    },
 
-                this.dispatchEvent(new sinon.Event("loadstart", false, false, this));
-            },
+    // Currently treats ALL data as a DOMString (i.e. no Document)
+    send: function send(data) {
+        verifyState(this);
 
-            abort: function abort() {
-                this.aborted = true;
-                clearResponse(this);
-                this.errorFlag = true;
-                this.requestHeaders = {};
-                this.responseHeaders = {};
+        if (!/^(head)$/i.test(this.method)) {
+            var contentType = getHeader(this.requestHeaders, "Content-Type");
+            if (this.requestHeaders[contentType]) {
+                var value = this.requestHeaders[contentType].split(";");
+                this.requestHeaders[contentType] = value[0] + ";charset=utf-8";
+            } else if (supportsFormData && !(data instanceof FormData)) {
+                this.requestHeaders["Content-Type"] = "text/plain;charset=utf-8";
+            }
 
-                if (this.readyState > FakeXMLHttpRequest.UNSENT && this.sendFlag) {
-                    this.readyStateChange(FakeXMLHttpRequest.DONE);
-                    this.sendFlag = false;
-                }
+            this.requestBody = data;
+        }
 
-                this.readyState = FakeXMLHttpRequest.UNSENT;
-            },
+        this.errorFlag = false;
+        this.sendFlag = this.async;
+        clearResponse(this);
+        this.readyStateChange(FakeXMLHttpRequest.OPENED);
 
-            error: function error() {
-                clearResponse(this);
-                this.errorFlag = true;
-                this.requestHeaders = {};
-                this.responseHeaders = {};
+        if (typeof this.onSend === "function") {
+            this.onSend(this);
+        }
 
-                this.readyStateChange(FakeXMLHttpRequest.DONE);
-            },
+        this.dispatchEvent(new sinonEvent.Event("loadstart", false, false, this));
+    },
 
-            getResponseHeader: function getResponseHeader(header) {
-                if (this.readyState < FakeXMLHttpRequest.HEADERS_RECEIVED) {
-                    return null;
-                }
+    abort: function abort() {
+        this.aborted = true;
+        clearResponse(this);
+        this.errorFlag = true;
+        this.requestHeaders = {};
+        this.responseHeaders = {};
 
-                if (/^Set-Cookie2?$/i.test(header)) {
-                    return null;
-                }
+        if (this.readyState !== FakeXMLHttpRequest.UNSENT && this.sendFlag
+            && this.readyState !== FakeXMLHttpRequest.DONE) {
+            this.readyStateChange(FakeXMLHttpRequest.DONE);
+            this.sendFlag = false;
+        }
 
-                header = getHeader(this.responseHeaders, header);
+        this.readyState = FakeXMLHttpRequest.UNSENT;
+    },
 
-                return this.responseHeaders[header] || null;
-            },
+    error: function () {
+        clearResponse(this);
+        this.errorFlag = true;
+        this.requestHeaders = {};
+        this.responseHeaders = {};
 
-            getAllResponseHeaders: function getAllResponseHeaders() {
-                if (this.readyState < FakeXMLHttpRequest.HEADERS_RECEIVED) {
-                    return "";
-                }
+        this.readyStateChange(FakeXMLHttpRequest.DONE);
+    },
 
-                var headers = "";
+    getResponseHeader: function getResponseHeader(header) {
+        if (this.readyState < FakeXMLHttpRequest.HEADERS_RECEIVED) {
+            return null;
+        }
 
-                for (var header in this.responseHeaders) {
-                    if (this.responseHeaders.hasOwnProperty(header) &&
-                        !/^Set-Cookie2?$/i.test(header)) {
-                        headers += header + ": " + this.responseHeaders[header] + "\r\n";
-                    }
-                }
+        if (/^Set-Cookie2?$/i.test(header)) {
+            return null;
+        }
 
-                return headers;
-            },
+        header = getHeader(this.responseHeaders, header);
 
-            setResponseBody: function setResponseBody(body) {
-                verifyRequestSent(this);
-                verifyHeadersReceived(this);
-                verifyResponseBodyType(body);
-                var contentType = this.getResponseHeader("Content-Type");
+        return this.responseHeaders[header] || null;
+    },
 
-                var isTextResponse = this.responseType === "" || this.responseType === "text";
-                clearResponse(this);
-                if (this.async) {
-                    var chunkSize = this.chunkSize || 10;
-                    var index = 0;
+    getAllResponseHeaders: function getAllResponseHeaders() {
+        if (this.readyState < FakeXMLHttpRequest.HEADERS_RECEIVED) {
+            return "";
+        }
 
-                    do {
-                        this.readyStateChange(FakeXMLHttpRequest.LOADING);
+        var responseHeaders = this.responseHeaders;
+        var headers = Object.keys(responseHeaders)
+            .filter(excludeSetCookie2Header)
+            .reduce(function (prev, header) {
+                var value = responseHeaders[header];
 
-                        if (isTextResponse) {
-                            this.responseText = this.response += body.substring(index, index + chunkSize);
-                        }
-                        index += chunkSize;
-                    } while (index < body.length);
-                }
+                return prev + (header + ": " + value + "\r\n");
+            }, "");
 
-                this.response = convertResponseBody(this.responseType, contentType, body);
+        return headers;
+    },
+
+    setResponseBody: function setResponseBody(body) {
+        verifyRequestSent(this);
+        verifyHeadersReceived(this);
+        verifyResponseBodyType(body);
+        var contentType = this.overriddenMimeType || this.getResponseHeader("Content-Type");
+
+        var isTextResponse = this.responseType === "" || this.responseType === "text";
+        clearResponse(this);
+        if (this.async) {
+            var chunkSize = this.chunkSize || 10;
+            var index = 0;
+
+            do {
+                this.readyStateChange(FakeXMLHttpRequest.LOADING);
+
                 if (isTextResponse) {
-                    this.responseText = this.response;
+                    this.responseText = this.response += body.substring(index, index + chunkSize);
                 }
+                index += chunkSize;
+            } while (index < body.length);
+        }
 
-                if (this.responseType === "document") {
-                    this.responseXML = this.response;
-                } else if (this.responseType === "" && isXmlContentType(contentType)) {
-                    this.responseXML = FakeXMLHttpRequest.parseXML(this.responseText);
-                }
-                this.progress = body.length;
-                this.readyStateChange(FakeXMLHttpRequest.DONE);
-            },
+        this.response = convertResponseBody(this.responseType, contentType, body);
+        if (isTextResponse) {
+            this.responseText = this.response;
+        }
 
-            respond: function respond(status, headers, body) {
-                this.status = typeof status === "number" ? status : 200;
-                this.statusText = FakeXMLHttpRequest.statusCodes[this.status];
-                this.setResponseHeaders(headers || {});
-                this.setResponseBody(body || "");
-            },
+        if (this.responseType === "document") {
+            this.responseXML = this.response;
+        } else if (this.responseType === "" && isXmlContentType(contentType)) {
+            this.responseXML = FakeXMLHttpRequest.parseXML(this.responseText);
+        }
+        this.readyStateChange(FakeXMLHttpRequest.DONE);
+    },
 
-            uploadProgress: function uploadProgress(progressEventRaw) {
-                if (supportsProgress) {
-                    this.upload.dispatchEvent(new sinon.ProgressEvent("progress", progressEventRaw));
-                }
-            },
+    respond: function respond(status, headers, body) {
+        this.setStatus(status);
+        this.setResponseHeaders(headers || {});
+        this.setResponseBody(body || "");
+    },
 
-            downloadProgress: function downloadProgress(progressEventRaw) {
-                if (supportsProgress) {
-                    this.dispatchEvent(new sinon.ProgressEvent("progress", progressEventRaw));
-                }
-            },
+    uploadProgress: function uploadProgress(progressEventRaw) {
+        if (supportsProgress) {
+            this.upload.dispatchEvent(new sinonEvent.ProgressEvent("progress", progressEventRaw));
+        }
+    },
 
-            uploadError: function uploadError(error) {
-                if (supportsCustomEvent) {
-                    this.upload.dispatchEvent(new sinon.CustomEvent("error", {detail: error}));
-                }
+    downloadProgress: function downloadProgress(progressEventRaw) {
+        if (supportsProgress) {
+            this.dispatchEvent(new sinonEvent.ProgressEvent("progress", progressEventRaw));
+        }
+    },
+
+    uploadError: function uploadError(error) {
+        if (supportsCustomEvent) {
+            this.upload.dispatchEvent(new sinonEvent.CustomEvent("error", {detail: error}));
+        }
+    },
+
+    overrideMimeType: function overrideMimeType(type) {
+        if (this.readyState >= FakeXMLHttpRequest.LOADING) {
+            throw new Error("INVALID_STATE_ERR");
+        }
+        this.overriddenMimeType = type;
+    }
+});
+
+var states = {
+    UNSENT: 0,
+    OPENED: 1,
+    HEADERS_RECEIVED: 2,
+    LOADING: 3,
+    DONE: 4
+};
+
+extend(FakeXMLHttpRequest, states);
+extend(FakeXMLHttpRequest.prototype, states);
+
+function useFakeXMLHttpRequest() {
+    FakeXMLHttpRequest.restore = function restore(keepOnCreate) {
+        if (sinonXhr.supportsXHR) {
+            global.XMLHttpRequest = sinonXhr.GlobalXMLHttpRequest;
+        }
+
+        if (sinonXhr.supportsActiveX) {
+            global.ActiveXObject = sinonXhr.GlobalActiveXObject;
+        }
+
+        delete FakeXMLHttpRequest.restore;
+
+        if (keepOnCreate !== true) {
+            delete FakeXMLHttpRequest.onCreate;
+        }
+    };
+    if (sinonXhr.supportsXHR) {
+        global.XMLHttpRequest = FakeXMLHttpRequest;
+    }
+
+    if (sinonXhr.supportsActiveX) {
+        global.ActiveXObject = function ActiveXObject(objId) {
+            if (objId === "Microsoft.XMLHTTP" || /^Msxml2\.XMLHTTP/i.test(objId)) {
+
+                return new FakeXMLHttpRequest();
             }
-        });
 
-        sinon.extend(FakeXMLHttpRequest, {
-            UNSENT: 0,
-            OPENED: 1,
-            HEADERS_RECEIVED: 2,
-            LOADING: 3,
-            DONE: 4
-        });
-
-        sinon.useFakeXMLHttpRequest = function () {
-            FakeXMLHttpRequest.restore = function restore(keepOnCreate) {
-                if (sinonXhr.supportsXHR) {
-                    global.XMLHttpRequest = sinonXhr.GlobalXMLHttpRequest;
-                }
-
-                if (sinonXhr.supportsActiveX) {
-                    global.ActiveXObject = sinonXhr.GlobalActiveXObject;
-                }
-
-                delete FakeXMLHttpRequest.restore;
-
-                if (keepOnCreate !== true) {
-                    delete FakeXMLHttpRequest.onCreate;
-                }
-            };
-            if (sinonXhr.supportsXHR) {
-                global.XMLHttpRequest = FakeXMLHttpRequest;
-            }
-
-            if (sinonXhr.supportsActiveX) {
-                global.ActiveXObject = function ActiveXObject(objId) {
-                    if (objId === "Microsoft.XMLHTTP" || /^Msxml2\.XMLHTTP/i.test(objId)) {
-
-                        return new FakeXMLHttpRequest();
-                    }
-
-                    return new sinonXhr.GlobalActiveXObject(objId);
-                };
-            }
-
-            return FakeXMLHttpRequest;
+            return new sinonXhr.GlobalActiveXObject(objId);
         };
-
-        sinon.FakeXMLHttpRequest = FakeXMLHttpRequest;
     }
 
-    var isNode = typeof module !== "undefined" && module.exports && typeof require === "function";
-    var isAMD = typeof define === "function" && typeof define.amd === "object" && define.amd;
+    return FakeXMLHttpRequest;
+}
 
-    function loadDependencies(require, exports, module) {
-        var sinon = require("./core");
-        require("../extend");
-        require("./event");
-        require("../log_error");
-        makeApi(sinon);
-        module.exports = sinon;
-    }
-
-    if (isAMD) {
-        define(loadDependencies);
-        return;
-    }
-
-    if (isNode) {
-        loadDependencies(require, module.exports, module);
-        return;
-    }
-
-    if (sinonGlobal) {
-        makeApi(sinonGlobal);
-    }
-}(
-    typeof sinon === "object" && sinon, // eslint-disable-line no-undef
-    typeof global !== "undefined" ? global : self
-));
+module.exports = {
+    xhr: sinonXhr,
+    FakeXMLHttpRequest: FakeXMLHttpRequest,
+    useFakeXMLHttpRequest: useFakeXMLHttpRequest
+};

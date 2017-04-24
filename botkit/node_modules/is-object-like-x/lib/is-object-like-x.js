@@ -23,7 +23,7 @@
  *
  * ES6 isObjectLike module.
  *
- * @version 1.1.1
+ * @version 1.2.0
  * @author Xotic750 <Xotic750@gmail.com>
  * @copyright  Xotic750
  * @license {@link <https://opensource.org/licenses/MIT> MIT}
@@ -96,7 +96,7 @@
  *
  * Requires ES3 or above.
  *
- * @version 1.1.1
+ * @version 1.2.0
  * @author Xotic750 <Xotic750@gmail.com>
  * @copyright  Xotic750
  * @license {@link <https://opensource.org/licenses/MIT> MIT}
@@ -151,7 +151,7 @@
  *
  * @see {@link http://www.ecma-international.org/ecma-262/6.0/#sec-@@tostringtag|26.3.1 @@toStringTag}
  *
- * @version 1.1.1
+ * @version 1.2.0
  * @author Xotic750 <Xotic750@gmail.com>
  * @copyright  Xotic750
  * @license {@link <https://opensource.org/licenses/MIT> MIT}
@@ -202,7 +202,7 @@
  *
  * Determine whether a given value is a function object.
  *
- * @version 1.1.1
+ * @version 1.2.0
  * @author Xotic750 <Xotic750@gmail.com>
  * @copyright  Xotic750
  * @license {@link <https://opensource.org/licenses/MIT> MIT}
@@ -233,7 +233,7 @@
    * @return {boolean} Returns `true` if `value` is correctly classified,
    * else `false`.
    */
-  var tryFunctionObject = function funcToString(value) {
+  var tryFuncToString = function funcToString(value) {
     try {
       fToString.call(value);
       return true;
@@ -267,7 +267,7 @@
       return false;
     }
     if (hasToStringTag) {
-      return tryFunctionObject(value);
+      return tryFuncToString(value);
     }
     var strTag = toStringTag(value);
     return strTag === funcTag || strTag === genTag || strTag === asyncTag;
@@ -350,7 +350,7 @@ module.exports = isNull;
  *
  * @see {@link http://www.ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring|19.1.3.6 Object.prototype.toString ( )}
  *
- * @version 1.1.1
+ * @version 1.2.0
  * @author Xotic750 <Xotic750@gmail.com>
  * @copyright  Xotic750
  * @license {@link <https://opensource.org/licenses/MIT> MIT}
@@ -369,6 +369,7 @@ module.exports = isNull;
   var isUndefined = _dereq_('validate.io-undefined');
   var nullTag = '[object Null]';
   var undefTag = '[object Undefined]';
+  var toStr = Object.prototype.toString;
 
   /**
    * The `toStringTag` method returns "[object type]", where type is the
@@ -388,7 +389,7 @@ module.exports = isNull;
     if (isUndefined(value)) {
       return undefTag;
     }
-    return Object.prototype.toString.call(value);
+    return toStr.call(value);
   };
 }());
 
