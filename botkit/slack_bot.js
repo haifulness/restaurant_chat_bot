@@ -75,7 +75,7 @@ var output = '';
 var response_context = {};
 
 var controller = Botkit.slackbot({
-    debug: true,
+    //debug: true,
 });
 
 var bot = controller.spawn({
@@ -86,9 +86,9 @@ var Conversation = require('watson-developer-cloud/conversation/v1');
 
 // Set up Conversation service wrapper.
 var conversation = new Conversation({
-  username: '09b163d0-b27a-42c4-97a7-b29aa366411b',
-  password: 'FFVYAzx7fSYb',
-  path: { workspace_id: '05f4529a-6773-4a5d-9999-e13015180a5a' },
+  username: process.env.username,
+  password: process.env.password,
+  path: { workspace_id: process.env.workspace },
   url: 'https://gateway.watsonplatform.net/conversation/api',
   version_date: '2016-10-21',
   version: 'v1'
