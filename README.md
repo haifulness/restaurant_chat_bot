@@ -10,7 +10,7 @@ This project is built using:
 
 - RapidAPI
 
-* How to run this project
+How to run this project
 
 - Clone the project into your local computer.
 
