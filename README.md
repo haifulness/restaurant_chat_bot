@@ -26,9 +26,7 @@ How to run this project
 
 - Open Slack and open channel #cs421 in https://uic-cs.slack.com
 
-- Run the bot using the following command:
-
-    _bot_token=xoxb-175751689379-P9KnDQDK7guPmvnRMVEAMiCW username=962a54d0-ccc6-4b2d-ae4f-6919a90c7e1e password=iYpYXisjNBYV workspace=791ad6c6-a3eb-4bff-89cb-ebaefc67c996 node slack_bot.js_
+- Run the bot using the following command: <Hidden>
 
 - The bot should be ready for a conversation.
 
