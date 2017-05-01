@@ -64,8 +64,9 @@ This bot demonstrates many of the core features of Botkit:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 // RapidAPI is used to help us simplify Yelp Fusion API connection
-const RapidAPI = require('rapidapi-connect');
-const rapid = new RapidAPI("cs421", "c10b4173-cbf3-47c1-a35c-385dc88905c9");
+const rapidAPI_token = "c10b4173-cbf3-47c1-a35c-385dc88905c9";
+const RapidAPI = new require('rapidapi-connect');
+const rapid = new RapidAPI('cs421', rapidAPI_token);
 var default_location = "Chicago";
 var results_limit = "5";
 
@@ -80,7 +81,7 @@ var output = '';
 var response_context = {};
 
 var controller = Botkit.slackbot({
-    debug: true,
+    debug: false,
 });
 
 var bot = controller.spawn({
@@ -110,7 +111,7 @@ function processResponse(err, response) {
         var bot_response = "";    
 
         if (response.intents[0].intent == "Food") {
-            var categories = "restaurant," + response.output.text[0];
+            var categories = "food," + response.output.text[0];
             var results = rapid.call('YelpAPI', 'getBusinesses', { 
                 'accessToken': '_4Zt6rM00ZWHNhuIjmN7vGittFp5PoII9pZjidLmuCc2EAy2jTqPYCV2gnBN1c_SuxFMLkg4hnxL0FVz5Rz8G7jmfopiae2hrw-4VqiA6LX_lK3jOU5LkkFBWUL6WHYx',
                 'term': '',
@@ -128,19 +129,21 @@ function processResponse(err, response) {
                 'openAt': '',
                 'attributes': ''
              
-            });
+            })
 
-            console.log("RESULTS: \n")
-            console.log(results);
-
-            /*.on('success', (payload)=>{
-                 //bot_response = payload[0];
-                 console.log(payload);
+            .on('success', (payload)=>{
+                console.log("RESULTS: \n")
+                console.log(payload);
+                console.log("=================");
+                bot_response = payload;
 
             }).on('error', (payload)=>{
-
+                console.warn("ERROR:\n");
+                console.warn(payload);
+                console.log("=================");
+                bot_response = payload;
             });
-            */
+            
 
         };
 
