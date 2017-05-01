@@ -368,6 +368,16 @@ and the conversation will not collect responses until it is activated using [con
 
 Use `createConversation()` instead of `startConversation()` when you plan on creating more complex conversation structures using [threads](#conversation-threads) or [variables and templates](#using-variable-tokens-and-templates-in-conversation-threads) in your messages.
 
+#### bot.createPrivateConversation()
+| Argument | Description
+|---  |---
+| message   | incoming message to which the conversation is in response
+| callback  | a callback function in the form of  function(err,conversation) { ... }
+
+This works just like `startPrivateConversation()`, with one main difference - the conversation
+object passed into the callback will be in a dormant state. No messages will be sent,
+and the conversation will not collect responses until it is activated using [convo.activate()](#conversationactivate).
+
 ### Control Conversation Flow
 
 #### convo.activate()
@@ -490,7 +500,7 @@ controller.hears(['question me'], 'message_received', function(bot,message) {
 |---  |---
 | message   | String or message object
 
-convo.say() is a specialized version of `convo.addMessage()` that adds messages to the _current_ thread, essentially adding a message dynamically to the conversation. This should only be used in simple cases, or when building a conversation lots of dynamic content. Otherwise, creating `threads` is the recommended approach.
+convo.say() is a specialized version of `convo.addMessage()` that adds messages to the _current_ thread, essentially adding a message dynamically to the conversation. This should only be used in simple cases, or when building a conversation with lots of dynamic content. Otherwise, creating `threads` is the recommended approach.
 
 Call convo.say() several times in a row to queue messages inside the conversation. Only one message will be sent at a time, in the order they are queued.
 
@@ -514,7 +524,7 @@ controller.hears(['hello world'], 'message_received', function(bot,message) {
 | callback _or_ array of callbacks   | callback function in the form function(response_message,conversation), or array of objects in the form ``{ pattern: regular_expression, callback: function(response_message,conversation) { ... } }``
 | capture_options | _Optional_ Object defining options for capturing the response
 
-convo.say() is a specialized version of `convo.addQuestion()` that adds messages to the _current_ thread, essentially adding a message dynamically to the conversation. This should only be used in simple cases, or when building a conversation lots of dynamic content. Otherwise, creating `threads` is the recommended approach.
+convo.ask() is a specialized version of `convo.addQuestion()` that adds messages to the _current_ thread, essentially adding a message dynamically to the conversation. This should only be used in simple cases, or when building a conversation with lots of dynamic content. Otherwise, creating `threads` is the recommended approach.
 
 In particular, we recommend that developers avoid calling `convo.ask()` or `convo.say()` inside a callbacks for `convo.ask()`. Multi-level callbacks encourage fragile code - for conversations requiring more than one branch, use threads!
 
@@ -557,6 +567,61 @@ convo.addMessage('This is the end!', 'the_end');
 // now transition there with a nice message
 convo.transitionTo('the_end','Well I think I am all done.');
 ```
+
+### convo.beforeThread
+| Argument | Description
+|--- |---
+| thread_name | String defining the name of a thread
+| handler_function | handler in the form function(convo, next) {...}
+
+Allows developers to specify one or more functions that will be called before the thread
+referenced in `thread_name` is activated.
+
+`handler_function` will receive the conversation object and a `next()` function. Developers
+must call the `next()` function when their asynchronous operations are completed, or the conversation
+may not continue as expected.  
+
+Note that if `gotoThread()` is called inside the handler function,
+it is recommended that `next()` be passed with an error parameter to stop processing of any additional thread handler functions that may be defined - that is, call `next('stop');`
+
+```javascript
+// create a thread that asks the user for their name.
+// after collecting name, call gotoThread('completed') to display completion message
+convo.addMessage({text: 'Hello let me ask you a question, then i will do something useful'},'default');
+convo.addQuestion({text: 'What is your name?'},function(res, convo) {
+  // name has been collected...
+  convo.gotoThread('completed');
+},{key: 'name'},'default');
+
+// create completed thread
+convo.addMessage({text: 'I saved your name in the database, {{vars.name}}'},'completed');
+
+// create an error  thread
+convo.addMessage({text: 'Oh no I had an error! {{vars.error}}'},'error');
+
+
+// now, define a function that will be called AFTER the `default` thread ends and BEFORE the `completed` thread begins
+convo.beforeThread('completed', function(convo, next) {
+
+  var name = convo.extractResponse('name');
+
+  // do something complex here
+  myFakeFunction(name).then(function(results) {
+
+    convo.setVar('results',results);
+
+    // call next to continue to the secondary thread...
+    next();
+
+  }).catch(function(err) {
+    convo.setVar('error', err);
+    convo.gotoThread('error');
+    next(err); // pass an error because we changed threads again during this transition
+  });
+
+});
+```
+
 
 #### Automatically Switch Threads using Actions
 
@@ -603,7 +668,7 @@ bot.createConversation(message, function(err, convo) {
     },'bad_response');
 
     // Create a yes/no question in the default thread...
-    convo.ask('Do you like cheese?', [
+    convo.addQuestion('Do you like cheese?', [
         {
             pattern: 'yes',
             callback: function(response, convo) {
@@ -622,7 +687,7 @@ bot.createConversation(message, function(err, convo) {
                 convo.gotoThread('bad_response');
             },
         }
-    ]);
+    ],{},'default');
 
     convo.activate();
 });

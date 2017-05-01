@@ -95,6 +95,7 @@ module.exports = function(bot, config) {
         'reminders.info',
         'reminders.list',
         'rtm.start',
+        'rtm.connect',
         'search.all',
         'search.files',
         'search.messages',
@@ -110,7 +111,12 @@ module.exports = function(bot, config) {
         'users.info',
         'users.list',
         'users.setActive',
-        'users.setPresence'
+        'users.setPresence',
+        'users.deletePhoto',
+        'users.identity',
+        'users.setPhoto',
+        'users.profile.get',
+        'users.profile.set'
     ];
 
     /**

@@ -81,7 +81,8 @@ var output = '';
 var response_context = {};
 
 var controller = Botkit.slackbot({
-    debug: true,
+    debug: false
+    //require_delivery: true,
 });
 
 var bot = controller.spawn({
@@ -133,15 +134,9 @@ function processResponse(err, response) {
 
             .on('success', (payload)=>{
                 console.log("RESULTS:")
-                console.log(payload.businesses[0].name);
+                console.log(typeof(payload.businesses[0].name));
                 console.log("=================");
                 bot_response = payload.businesses[0].name;
-
-                bot.say({
-                    text: bot_response,
-                    channel: '#cs421' 
-                });
-                response_context = response.context;
 
             }).on('error', (payload)=>{
                 console.warn("ERROR:");
@@ -159,9 +154,12 @@ function processResponse(err, response) {
 
         };
 
-        
+        bot.say({
+            text: bot_response,
+            channel: '#cs421' 
+        });
 
-        //response_context = response.context;
+        response_context = response.context;
     }
 }
 
@@ -172,10 +170,18 @@ controller.on('ambient', function(bot, message) {
       }, 
       processResponse
     );
+})
+
+controller.hears(['hi', 'hello', 'bot', 'whats up', 'sup'], ['direct_message','direct_mention','mention'], function (bot, message) {
+    //bot.reply(message, 'Hi there!');
+    bot.say({
+        text: "Hi there",
+        channel: '#cs421' 
+    });
 });
 
-
 /*
+
 controller.hears(['hello', 'hi'], 'direct_message,direct_mention,mention', function(bot, message) {
 
     bot.api.reactions.add({
@@ -321,7 +327,6 @@ controller.hears(['uptime', 'identify yourself', 'who are you', 'what is your na
              '>. I have been running for ' + uptime + ' on ' + hostname + '.');
 
     });
-
 */
 
 function formatUptime(uptime) {
