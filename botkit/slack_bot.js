@@ -67,30 +67,30 @@ This bot demonstrates many of the core features of Botkit:
 const rapidAPI_token = "c10b4173-cbf3-47c1-a35c-385dc88905c9";
 const RapidAPI = new require('rapidapi-connect');
 const rapid = new RapidAPI('cs421', rapidAPI_token);
-var default_location = "Chicago";
-var results_limit = "5";
 
+// By default, we will only look for restaurants in Chicago.
+// And we will list 3 restaurants at a time.
+var default_location = "Chicago";
+var results_limit = "3";
+var radius = "100";
+var sort_criteria = "distance";
+
+// Return an error if the program cannot connect to the Slack bot
 if (!process.env.bot_token) {
     console.log('Error: Specify token in environment');
     process.exit(1);
 }
 
+// Setup botkit
 var Botkit = require('./lib/Botkit.js');
 var os = require('os');
-var output = '';
-var response_context = {};
-
-var controller = Botkit.slackbot({
-    debug: true,
-});
-
+var controller = Botkit.slackbot({ debug: true, });
 var bot = controller.spawn({
     token: process.env.bot_token
 }).startRTM();
 
+// Set up Conversation service
 var Conversation = require('watson-developer-cloud/conversation/v1');
-
-// Set up Conversation service wrapper.
 var conversation = new Conversation({
   username: process.env.username,
   password: process.env.password,
@@ -100,71 +100,14 @@ var conversation = new Conversation({
   version: 'v1'
 });
 
-// Start conversation with empty message.
+// Context of the response, which the bot bases on to choose the right response
+var response_context = {};
+
+// Start conversation with an empty input (a greeting message stored on
+// Conversation service will be displayed)
 conversation.message({}, processResponse);
 
-function processResponse(err, response) {
-    // If an intent was detected, log it out to the console.
-    if (response.intents.length > 0) {
-
-        // What will be sent back to user
-        var bot_response = "";    
-
-        if (response.intents[0].intent == "Food") {
-            var categories = "food," + response.output.text[0];
-            var results = rapid.call('YelpAPI', 'getBusinesses', { 
-                'accessToken': '_4Zt6rM00ZWHNhuIjmN7vGittFp5PoII9pZjidLmuCc2EAy2jTqPYCV2gnBN1c_SuxFMLkg4hnxL0FVz5Rz8G7jmfopiae2hrw-4VqiA6LX_lK3jOU5LkkFBWUL6WHYx',
-                'term': '',
-                'location': default_location,
-                'latitude': '',
-                'longitude': '',
-                'radius': '',
-                'categories': categories,
-                'locale': '',
-                'limit': results_limit,
-                'offset': '',
-                'sortBy': '',
-                'price': '',
-                'openNow': '',
-                'openAt': '',
-                'attributes': ''
-             
-            })
-
-            .on('success', (payload)=>{
-                console.log("RESULTS:")
-                console.log(payload.businesses[0].name);
-                console.log("=================");
-                bot_response = payload.businesses[0].name;
-
-                bot.say({
-                    text: bot_response,
-                    channel: '#cs421' 
-                });
-                response_context = response.context;
-
-            }).on('error', (payload)=>{
-                console.warn("ERROR:");
-                console.warn(payload);
-                console.log("=================");
-
-                bot.say({
-                    //text: "SORRY FELLOW HUMAN. I AM ~DISCONNECTED~ BUSY RIGHT NOW AND CANNOT CHAT.",
-                    text: payload.status_msg.error.description,
-                    channel: '#cs421' 
-                });
-
-            });
-            
-
-        };
-
-        
-
-        //response_context = response.context;
-    }
-}
-
+// After that, the bot's response will be based on user input
 controller.on('ambient', function(bot, message) {
     conversation.message({
         input: { text: message.text },
@@ -174,156 +117,103 @@ controller.on('ambient', function(bot, message) {
     );
 });
 
+// Main processing unit. This function handles user's input and returns response.
+// This function also sends request to Yelp API to get a list of restaurants when
+// user has chosen the preferences.
+function processResponse(err, response) {
 
-/*
-controller.hears(['hello', 'hi'], 'direct_message,direct_mention,mention', function(bot, message) {
-
-    bot.api.reactions.add({
-        timestamp: message.ts,
-        channel: message.channel,
-        name: 'robot_face',
-    }, function(err, res) {
-        if (err) {
-            bot.botkit.log('Failed to add emoji reaction :(', err);
-        }
-    });
-
-
-    controller.storage.users.get(message.user, function(err, user) {
-        if (user && user.name) {
-            bot.reply(message, 'Hello ' + user.name + '!!');
-        } else {
-            bot.reply(message, 'Hello.');
-        }
-    });
-});
-
-controller.hears(['call me (.*)', 'my name is (.*)'], 'direct_message,direct_mention,mention', function(bot, message) {
-    var name = message.match[1];
-    controller.storage.users.get(message.user, function(err, user) {
-        if (!user) {
-            user = {
-                id: message.user,
-            };
-        }
-        user.name = name;
-        controller.storage.users.save(user, function(err, id) {
-            bot.reply(message, 'Got it. I will call you ' + user.name + ' from now on.');
-        });
-    });
-});
-
-controller.hears(['what is my name', 'who am i'], 'direct_message,direct_mention,mention', function(bot, message) {
-
-    controller.storage.users.get(message.user, function(err, user) {
-        if (user && user.name) {
-            bot.reply(message, 'Your name is ' + user.name);
-        } else {
-            bot.startConversation(message, function(err, convo) {
-                if (!err) {
-                    convo.say('I do not know your name yet!');
-                    convo.ask('What should I call you?', function(response, convo) {
-                        convo.ask('You want me to call you `' + response.text + '`?', [
-                            {
-                                pattern: 'yes',
-                                callback: function(response, convo) {
-                                    // since no further messages are queued after this,
-                                    // the conversation will end naturally with status == 'completed'
-                                    convo.next();
-                                }
-                            },
-                            {
-                                pattern: 'no',
-                                callback: function(response, convo) {
-                                    // stop the conversation. this will cause it to end with status == 'stopped'
-                                    convo.stop();
-                                }
-                            },
-                            {
-                                default: true,
-                                callback: function(response, convo) {
-                                    convo.repeat();
-                                    convo.next();
-                                }
-                            }
-                        ]);
-
-                        convo.next();
-
-                    }, {'key': 'nickname'}); // store the results in a field called nickname
-
-                    convo.on('end', function(convo) {
-                        if (convo.status == 'completed') {
-                            bot.reply(message, 'OK! I will update my dossier...');
-
-                            controller.storage.users.get(message.user, function(err, user) {
-                                if (!user) {
-                                    user = {
-                                        id: message.user,
-                                    };
-                                }
-                                user.name = convo.extractResponse('nickname');
-                                controller.storage.users.save(user, function(err, id) {
-                                    bot.reply(message, 'Got it. I will call you ' + user.name + ' from now on.');
-                                });
-                            });
-
-
-
-                        } else {
-                            // this happens if the conversation ended prematurely for some reason
-                            bot.reply(message, 'OK, nevermind!');
-                        }
+    // If an intent was detected
+    if (response.intents.length > 0 && response.intents[0].intent == "Food") {
+            
+        // Prepare the category of the API request based on Yelp's requirement.
+        // The response from Conversation service in this case is the cuisine
+        // code according to user's preference.
+        var categories = "food," + response.output.text[0];
+        
+        // API request
+        var results = rapid.call('YelpAPI', 'getBusinesses', { 
+            'accessToken': '_4Zt6rM00ZWHNhuIjmN7vGittFp5PoII9pZjidLmuCc2EAy2jTqPYCV2gnBN1c_SuxFMLkg4hnxL0FVz5Rz8G7jmfopiae2hrw-4VqiA6LX_lK3jOU5LkkFBWUL6WHYx',
+            'term': '',
+            'location': default_location,
+            'latitude': '',
+            'longitude': '',
+            'radius': radius,
+            'categories': categories,
+            'locale': '',
+            'limit': results_limit,
+            'offset': '',
+            'sortBy': sort_criteria,
+            'price': '',
+            'openNow': '',
+            'openAt': '',
+            'attributes': '' 
+        })
+        .on('success', (payload)=>{
+            bot.say({
+                text: display_result(payload),
+                channel: '#cs421' 
+            });
+            /*
+            if (payload.businesses.length > 0) {
+                bot.say({
+                    text: "Here are the best " + results_limit + " matches based on your prefences: \n",
+                    channel: '#cs421' 
+                });
+                for (i = 0; i < payload.businesses.length; i++) {
+                    bot.say({
+                        text: "" + (i+1) + ". " + payload.businesses[i].name
+                                 + "\n - Location: " + payload.businesses[i].location.display_address[0]
+                                 + ", " + payload.businesses[i].location.display_address[1]
+                                 + "\n - Phone: " + payload.businesses[i].display_phone
+                                 ,
+                        channel: '#cs421' 
                     });
                 }
+            } else {
+                bot.say({
+                    text: "No matching result",
+                    channel: '#cs421' 
+                });
+            }*/
+
+        }).on('error', (payload)=>{
+            bot.say({
+                text: payload.status_msg.error.description,
+                channel: '#cs421' 
             });
-        }
-    });
-});
+        });
+
+    } else {
+
+        // Send raw response received from Conversation service to user
+        bot.say({
+            text: response.output.text[0],
+            channel: '#cs421' 
+        });
+    }
+    
+    // Update context
+    response_context = response.context;   
+}
 
 
-controller.hears(['shutdown'], 'direct_message,direct_mention,mention', function(bot, message) {
+// Convert a list of restaurant to a string
+function display_result(payload) {
+    if (payload.length == 0) return "No matching result";
 
-    bot.startConversation(message, function(err, convo) {
+    var out = "Here are the best " + results_limit + " matches based on your prefences: \n";
+    for (i = 0; i < payload.businesses.length; i++) {
+        out += "" + (i+1) + ". " + payload.businesses[i].name
+                     + "\n - Location: " + payload.businesses[i].location.display_address[0]
+                     + ", " + payload.businesses[i].location.display_address[1]
+                     + "\n - Phone: " + payload.businesses[i].display_phone
+                     + "\n"
+                     ;
+    }
+    return out;
+}
 
-        convo.ask('Are you sure you want me to shutdown?', [
-            {
-                pattern: bot.utterances.yes,
-                callback: function(response, convo) {
-                    convo.say('Bye!');
-                    convo.next();
-                    setTimeout(function() {
-                        process.exit();
-                    }, 3000);
-                }
-            },
-        {
-            pattern: bot.utterances.no,
-            default: true,
-            callback: function(response, convo) {
-                convo.say('*Phew!*');
-                convo.next();
-            }
-        }
-        ]);
-    });
-});
-
-
-controller.hears(['uptime', 'identify yourself', 'who are you', 'what is your name'],
-    'direct_message,direct_mention,mention', function(bot, message) {
-
-        var hostname = os.hostname();
-        var uptime = formatUptime(process.uptime());
-
-        bot.reply(message,
-            ':robot_face: I am a bot named <@' + bot.identity.name +
-             '>. I have been running for ' + uptime + ' on ' + hostname + '.');
-
-    });
-
-*/
-
+// Provided by botkit
 function formatUptime(uptime) {
     var unit = 'second';
     if (uptime > 60) {

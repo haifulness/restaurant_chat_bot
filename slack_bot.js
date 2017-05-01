@@ -106,12 +106,15 @@ conversation.message({}, processResponse);
 
 function processResponse(err, response) {
     // If an intent was detected, log it out to the console.
+    console.log("INTENTS: " + response.intents + "\n");
     if (response.intents.length > 0) {
 
         // What will be sent back to user
-        var bot_response = "";    
+        var bot_response = "";  
+
 
         if (response.intents[0].intent == "Food") {
+            console.log("CATEGORY RESPONSE: " + response.output.text[0] + "\n================\n");
             var categories = "food," + response.output.text[0];
             var results = rapid.call('YelpAPI', 'getBusinesses', { 
                 'accessToken': '_4Zt6rM00ZWHNhuIjmN7vGittFp5PoII9pZjidLmuCc2EAy2jTqPYCV2gnBN1c_SuxFMLkg4hnxL0FVz5Rz8G7jmfopiae2hrw-4VqiA6LX_lK3jOU5LkkFBWUL6WHYx',
@@ -138,13 +141,13 @@ function processResponse(err, response) {
                 console.log("=================");
                 bot_response = payload.businesses[0].name;
 
-            }).on('error', (payload)=>{
-                console.warn("ERROR:");
-                console.warn(payload);
-                console.log("=================");
-
                 bot.say({
-                    //text: "SORRY FELLOW HUMAN. I AM ~DISCONNECTED~ BUSY RIGHT NOW AND CANNOT CHAT.",
+                    text: bot_response,
+                    channel: '#cs421' 
+                });
+
+            }).on('error', (payload)=>{
+                bot.say({
                     text: payload.status_msg.error.description,
                     channel: '#cs421' 
                 });
@@ -153,11 +156,6 @@ function processResponse(err, response) {
             
 
         };
-
-        bot.say({
-            text: bot_response,
-            channel: '#cs421' 
-        });
 
         response_context = response.context;
     }
