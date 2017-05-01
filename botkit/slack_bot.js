@@ -70,7 +70,7 @@ const rapid = new RapidAPI('cs421', rapidAPI_token);
 var default_location = "Chicago";
 var results_limit = "5";
 
-if (!process.env.token) {
+if (!process.env.bot_token) {
     console.log('Error: Specify token in environment');
     process.exit(1);
 }
