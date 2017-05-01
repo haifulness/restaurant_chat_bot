@@ -132,16 +132,15 @@ function processResponse(err, response) {
             })
 
             .on('success', (payload)=>{
-                console.log("RESULTS: \n")
-                console.log(payload);
+                console.log("RESULTS:")
+                console.log(payload.businesses[0].name);
                 console.log("=================");
-                bot_response = payload;
+                bot_response = payload.businesses[0].name;
 
             }).on('error', (payload)=>{
-                console.warn("ERROR:\n");
+                console.warn("ERROR:");
                 console.warn(payload);
                 console.log("=================");
-                bot_response = payload;
             });
             
 
