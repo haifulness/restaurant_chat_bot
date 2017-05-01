@@ -85,7 +85,7 @@ var controller = Botkit.slackbot({
 });
 
 var bot = controller.spawn({
-    token: process.env.token
+    token: process.env.bot_token
 }).startRTM();
 
 var Conversation = require('watson-developer-cloud/conversation/v1');
