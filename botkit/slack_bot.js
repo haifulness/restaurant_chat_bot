@@ -68,12 +68,11 @@ const rapidAPI_token = "c10b4173-cbf3-47c1-a35c-385dc88905c9";
 const RapidAPI = new require('rapidapi-connect');
 const rapid = new RapidAPI('cs421', rapidAPI_token);
 
-// By default, we will only look for restaurants in Chicago.
-// And we will list 3 restaurants at a time.
-var default_location = "Chicago";
+// Default parameters
+var default_location = "UIC";
 var results_limit = "3";
-var radius = "100";
-var sort_criteria = "distance";
+var radius = "1000";
+var sort_criteria = "rating";
 
 // Return an error if the program cannot connect to the Slack bot
 if (!process.env.bot_token) {
@@ -84,7 +83,7 @@ if (!process.env.bot_token) {
 // Setup botkit
 var Botkit = require('./lib/Botkit.js');
 var os = require('os');
-var controller = Botkit.slackbot({ debug: true, });
+var controller = Botkit.slackbot({ debug: false, });
 var bot = controller.spawn({
     token: process.env.bot_token
 }).startRTM();
@@ -102,6 +101,9 @@ var conversation = new Conversation({
 
 // Context of the response, which the bot bases on to choose the right response
 var response_context = {};
+
+// Id's of the restaurants received in the previous step
+var restaurant_id = ["", "", ""];
 
 // Start conversation with an empty input (a greeting message stored on
 // Conversation service will be displayed)
@@ -121,6 +123,10 @@ controller.on('ambient', function(bot, message) {
 // This function also sends request to Yelp API to get a list of restaurants when
 // user has chosen the preferences.
 function processResponse(err, response) {
+    var selection = {
+        categories: "food,",
+        price: 0
+    };
 
     // If an intent was detected
     if (response.intents.length > 0 && response.intents[0].intent == "Food") {
@@ -128,8 +134,8 @@ function processResponse(err, response) {
         // Prepare the category of the API request based on Yelp's requirement.
         // The response from Conversation service in this case is the cuisine
         // code according to user's preference.
-        var categories = "food," + response.output.text[0];
-        
+        selection.categories += response.output.text[0];
+            
         // API request
         var results = rapid.call('YelpAPI', 'getBusinesses', { 
             'accessToken': '_4Zt6rM00ZWHNhuIjmN7vGittFp5PoII9pZjidLmuCc2EAy2jTqPYCV2gnBN1c_SuxFMLkg4hnxL0FVz5Rz8G7jmfopiae2hrw-4VqiA6LX_lK3jOU5LkkFBWUL6WHYx',
@@ -138,7 +144,7 @@ function processResponse(err, response) {
             'latitude': '',
             'longitude': '',
             'radius': radius,
-            'categories': categories,
+            'categories': selection.categories,
             'locale': '',
             'limit': results_limit,
             'offset': '',
@@ -153,28 +159,6 @@ function processResponse(err, response) {
                 text: display_result(payload),
                 channel: '#cs421' 
             });
-            /*
-            if (payload.businesses.length > 0) {
-                bot.say({
-                    text: "Here are the best " + results_limit + " matches based on your prefences: \n",
-                    channel: '#cs421' 
-                });
-                for (i = 0; i < payload.businesses.length; i++) {
-                    bot.say({
-                        text: "" + (i+1) + ". " + payload.businesses[i].name
-                                 + "\n - Location: " + payload.businesses[i].location.display_address[0]
-                                 + ", " + payload.businesses[i].location.display_address[1]
-                                 + "\n - Phone: " + payload.businesses[i].display_phone
-                                 ,
-                        channel: '#cs421' 
-                    });
-                }
-            } else {
-                bot.say({
-                    text: "No matching result",
-                    channel: '#cs421' 
-                });
-            }*/
 
         }).on('error', (payload)=>{
             bot.say({
@@ -185,12 +169,37 @@ function processResponse(err, response) {
 
     } else {
 
-        // Send raw response received from Conversation service to user
-        bot.say({
-            text: response.output.text[0],
-            channel: '#cs421' 
-        });
+        // GEt photos of a restaurant
+        if (parseInt(response.output.text[0]) > 0 && parseInt(response.output.text[0]) <= results_limit) {
+            var index = parseInt(response.output.text[0]) - 1;
+
+            rapid.call('YelpAPI', 'getSingleBusiness', { 
+                'accessToken': '_4Zt6rM00ZWHNhuIjmN7vGittFp5PoII9pZjidLmuCc2EAy2jTqPYCV2gnBN1c_SuxFMLkg4hnxL0FVz5Rz8G7jmfopiae2hrw-4VqiA6LX_lK3jOU5LkkFBWUL6WHYx',
+                'bussinessId': restaurant_id[index],
+             
+            }).on('success', (business)=>{
+                for (var i = 0; i < business.photos.length; i++) {
+                    bot.say({
+                        text: business.photos[i],
+                        channel: '#cs421' 
+                    });
+                }
+
+            }).on('error', (business)=>{
+                 /*YOUR CODE GOES HERE*/ 
+            });
+
+        } else {
+            
+            // Send raw response received from Conversation service to user
+            bot.say({
+                text: response.output.text[0],
+                channel: '#cs421' 
+            });
+        }
     }
+
+
     
     // Update context
     response_context = response.context;   
@@ -201,15 +210,30 @@ function processResponse(err, response) {
 function display_result(payload) {
     if (payload.length == 0) return "No matching result";
 
-    var out = "Here are the best " + results_limit + " matches based on your prefences: \n";
+    var out = "Here are " + payload.businesses.length + " best matched restaurant(s) based on your prefences: \n";
     for (i = 0; i < payload.businesses.length; i++) {
-        out += "" + (i+1) + ". " + payload.businesses[i].name
-                     + "\n - Location: " + payload.businesses[i].location.display_address[0]
-                     + ", " + payload.businesses[i].location.display_address[1]
-                     + "\n - Phone: " + payload.businesses[i].display_phone
-                     + "\n"
-                     ;
+        out += "\n" + (i+1) + ". " + payload.businesses[i].name;
+
+        if (payload.businesses[i].location.display_address[0])
+            out += "\n - Location: " + payload.businesses[i].location.display_address[0];
+
+        if (payload.businesses[i].location.display_address[1])
+            out += ", " + payload.businesses[i].location.display_address[1];
+
+        if (payload.businesses[i].location.display_phone)
+            out += "\n - Phone: " + payload.businesses[i].location.display_phone;
+        
+        if (payload.businesses[i].price)
+            out += "\n - Price: " + payload.businesses[i].price;
+
+        if (payload.businesses[i].rating)
+            out += "\n - Rating: " + payload.businesses[i].rating;
+
+        restaurant_id[i] = payload.businesses[i].id;
     }
+
+    out += "\n\nI can show you photos of these businesses. Which one do you want to see?";
+
     return out;
 }
 
